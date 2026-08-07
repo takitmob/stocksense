@@ -1,0 +1,16 @@
+{
+  "name": "StockSense AI",
+  "short_name": "StockSense",
+  "description": "Analyse boursière IA — BRVM, TSX, USA, Europe, Asie, Émergents",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080A0F",
+  "theme_color": "#080A0F",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["finance", "utilities"],
+  "lang": "fr"
+}

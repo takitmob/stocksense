@@ -21,20 +21,33 @@ let STATE = {
 };
 
 // ── THÈME ─────────────────────────────────────────────────────────────
-function applyTheme(t) {
+function applyTheme(t, instant) {
   STATE.theme = t;
-  document.documentElement.setAttribute('data-theme', t);
+  const root = document.documentElement;
+
+  if (instant) {
+    // Pas d'animation au 1er chargement
+    root.classList.add('no-transition');
+    root.setAttribute('data-theme', t);
+    requestAnimationFrame(() => root.classList.remove('no-transition'));
+  } else {
+    root.setAttribute('data-theme', t);
+  }
+
   const meta = document.getElementById('theme-color-meta');
   if (meta) meta.content = t === 'dark' ? '#080A0F' : '#F4F6FA';
+
   const btn = document.getElementById('theme-btn');
   if (btn) btn.textContent = t === 'dark' ? '🌙' : '☀️';
+
   const tog = document.getElementById('theme-toggle');
   if (tog) tog.classList.toggle('on', t === 'dark');
+
   localStorage.setItem('ss_theme', t);
 }
 
 function toggleTheme() {
-  applyTheme(STATE.theme === 'dark' ? 'light' : 'dark');
+  applyTheme(STATE.theme === 'dark' ? 'light' : 'dark', false);
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────
@@ -525,8 +538,8 @@ function init() {
     navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
   }
 
-  // Thème
-  applyTheme(STATE.theme);
+  // Thème — instant pour éviter le flash
+  applyTheme(STATE.theme, true);
 
   // Provider
   selectProvider(STATE.provider);

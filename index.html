@@ -12,6 +12,15 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/style.css">
 <title>StockSense AI</title>
+<!-- Thème appliqué immédiatement pour éviter le flash blanc→noir -->
+<script>
+(function(){
+  var t = localStorage.getItem('ss_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  var m = document.getElementById('theme-color-meta');
+  if (m) m.content = t === 'dark' ? '#080A0F' : '#F4F6FA';
+})();
+</script>
 </head>
 <body>
 

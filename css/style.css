@@ -26,6 +26,8 @@
 }
 
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+/* Bloquer les transitions au 1er rendu pour éviter le flash blanc→noir */
+html.no-transition *{ transition:none !important; }
 body{
   background:var(--bg);color:var(--tx);
   font-family:-apple-system,'SF Pro Display','Helvetica Neue',sans-serif;

@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="StockSense">
-<meta name="theme-color" content="#080A0F">
+<meta name="theme-color" content="#F4F6FA" id="theme-color-meta">
 <meta name="description" content="Analyse boursière IA — BRVM, TSX, USA, Europe, Asie, Émergents">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -15,44 +15,40 @@
 </head>
 <body>
 
-<!-- ── TOPBAR ── -->
+<!-- TOPBAR -->
 <div class="topbar">
   <div class="brand">
     <div class="brand-dot"></div>
     Stock<em>Sense</em>
     <span class="live-badge">LIVE</span>
   </div>
-  <div style="display:flex;align-items:center;gap:10px">
-    <div class="offline-badge" id="offline-b">
-      <span>📡</span><span>HORS LIGNE</span>
-    </div>
+  <div class="topbar-actions">
+    <div class="offline-badge" id="offline-b">📡 HORS LIGNE</div>
     <div class="mkt-row">
       <div class="mkt-item"><div class="mkt-name">BRVM</div><div class="mkt-val" id="bmv">+37.4%</div></div>
       <div class="mkt-item"><div class="mkt-name">TSX</div><div class="mkt-val" id="tmv">+12.1%</div></div>
     </div>
+    <button class="theme-toggle" id="theme-btn" onclick="SS_APP.toggleTheme()" title="Changer de thème">☀️</button>
   </div>
 </div>
 
-<!-- ══════════════════════ PAGE : ANALYSER ══════════════════════════ -->
 <main>
-<div class="page active" id="page-analyze">
 
+<!-- PAGE ANALYSER -->
+<div class="page active" id="page-analyze">
   <div class="hero">
     <div class="hero-tag"><div class="brand-dot" style="width:6px;height:6px"></div> IA · Temps réel</div>
     <h1>Ton filtre<br><em>d'investissement</em></h1>
     <p>Entre un ticker — l'IA analyse fondamentaux, technique et macro pour une décision claire.</p>
   </div>
 
-  <!-- SEARCH -->
   <div class="search-card">
     <div class="input-row">
       <div class="input-wrap">
         <span class="search-icon">⌕</span>
-        <input id="tickerInput" type="text"
-          placeholder="Ex: SNTS, ENB, XBAL…"
-          autocomplete="off" autocorrect="off"
-          spellcheck="false" autocapitalize="characters"
-          inputmode="text">
+        <input id="tickerInput" type="text" placeholder="Ex: SNTS, ENB, XBAL…"
+          autocomplete="off" autocorrect="off" spellcheck="false"
+          autocapitalize="characters" inputmode="text">
       </div>
       <select id="marketSelect">
         <option value="BRVM">🌍 BRVM</option>
@@ -60,20 +56,17 @@
         <option value="AUTO">🔍 Auto</option>
       </select>
     </div>
-
     <div class="intent-row">
       <button class="intent-btn active-buy" id="ib-buy"   onclick="SS_APP.setIntent('buy')">📈 ACHETER</button>
       <button class="intent-btn"            id="ib-sell"  onclick="SS_APP.setIntent('sell')">📉 VENDRE</button>
       <button class="intent-btn"            id="ib-watch" onclick="SS_APP.setIntent('watch')">👁 SURVEILLER</button>
     </div>
-
     <button class="analyze-btn" id="analyze-btn" onclick="SS_APP.runAnalysis()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
       </svg>
       Analyser maintenant
     </button>
-
     <div class="quick-picks">
       <span class="qp-label">Rapide :</span>
       <button class="qp-btn" onclick="SS_APP.quickPick('SNTS','BRVM')">SONATEL</button>
@@ -86,69 +79,62 @@
     </div>
   </div>
 
-  <!-- LOADING -->
   <div class="loading-state" id="loading-state">
     <div class="loading-ticker" id="loading-ticker">—</div>
-    <div style="color:var(--mu);font-size:12px">Analyse IA en cours…</div>
+    <div style="color:var(--mu);font-size:12px" id="loading-provider-label">Analyse IA en cours…</div>
     <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
     <div style="margin-top:12px" id="loading-steps"></div>
   </div>
 
-  <!-- RESULTS -->
   <div id="results-section" style="display:none"></div>
 
-  <!-- EMPTY -->
   <div class="empty-state" id="empty-state">
     <div class="empty-icon">📊</div>
     <div class="empty-title">Aucune analyse</div>
     <div class="empty-text">Entre un ticker ci-dessus ou utilise les accès rapides</div>
   </div>
-
 </div>
 
-<!-- ══════════════════════ PAGE : MARCHÉS ═══════════════════════════ -->
+<!-- PAGE MARCHÉS -->
 <div class="page" id="page-markets">
   <div class="page-header">
     <div class="page-eyebrow">Top Actions</div>
     <div class="page-title">Marchés mondiaux</div>
     <div class="page-sub">Meilleures opportunités par région — analyse IA</div>
   </div>
-
-  <div class="region-tabs" id="region-tabs">
-    <button class="rtab active" id="rt-brvm"      onclick="SS_APP.selectRegion('brvm',this)">
-      <span>🌍</span>BRVM<div class="rtab-dot" id="rd-brvm" style="background:#3A4158"></div>
+  <div class="region-tabs">
+    <button class="rtab active" onclick="SS_APP.selectRegion('brvm',this)">
+      🌍 BRVM<div class="rtab-dot" id="rd-brvm" style="background:#9BA3BC"></div>
     </button>
-    <button class="rtab" id="rt-tsx"       onclick="SS_APP.selectRegion('tsx',this)">
-      <span>🍁</span>Canada<div class="rtab-dot" id="rd-tsx" style="background:#3A4158"></div>
+    <button class="rtab" onclick="SS_APP.selectRegion('tsx',this)">
+      🍁 Canada<div class="rtab-dot" id="rd-tsx" style="background:#9BA3BC"></div>
     </button>
-    <button class="rtab" id="rt-usa"       onclick="SS_APP.selectRegion('usa',this)">
-      <span>🇺🇸</span>USA<div class="rtab-dot" id="rd-usa" style="background:#3A4158"></div>
+    <button class="rtab" onclick="SS_APP.selectRegion('usa',this)">
+      🇺🇸 USA<div class="rtab-dot" id="rd-usa" style="background:#9BA3BC"></div>
     </button>
-    <button class="rtab" id="rt-europe"    onclick="SS_APP.selectRegion('europe',this)">
-      <span>🇪🇺</span>Europe<div class="rtab-dot" id="rd-europe" style="background:#3A4158"></div>
+    <button class="rtab" onclick="SS_APP.selectRegion('europe',this)">
+      🇪🇺 Europe<div class="rtab-dot" id="rd-europe" style="background:#9BA3BC"></div>
     </button>
-    <button class="rtab" id="rt-asie"      onclick="SS_APP.selectRegion('asie',this)">
-      <span>🌏</span>Asie<div class="rtab-dot" id="rd-asie" style="background:#3A4158"></div>
+    <button class="rtab" onclick="SS_APP.selectRegion('asie',this)">
+      🌏 Asie<div class="rtab-dot" id="rd-asie" style="background:#9BA3BC"></div>
     </button>
-    <button class="rtab" id="rt-emergents" onclick="SS_APP.selectRegion('emergents',this)">
-      <span>🌐</span>Émergents<div class="rtab-dot" id="rd-emergents" style="background:#3A4158"></div>
+    <button class="rtab" onclick="SS_APP.selectRegion('emergents',this)">
+      🌐 Émergents<div class="rtab-dot" id="rd-emergents" style="background:#9BA3BC"></div>
     </button>
   </div>
-
   <div class="mkt-bar">
     <button class="mkt-refresh-btn" onclick="SS_APP.refreshMarket()">↻ Actualiser</button>
     <span class="mkt-ts" id="mkt-ts">Jamais actualisé</span>
   </div>
-
   <div id="mkt-body">
     <div class="mkt-loading">
       <div class="mkt-spin"></div>
-      <div class="mkt-load-txt">Appuie sur Actualiser ou sélectionne une région</div>
+      <div class="mkt-load-txt">Sélectionne une région pour commencer</div>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════ PAGE : GUIDE ═════════════════════════════ -->
+<!-- PAGE GUIDE -->
 <div class="page" id="page-guide">
   <div class="page-header">
     <div class="page-eyebrow">Fondamentaux</div>
@@ -159,7 +145,7 @@
   <div style="height:24px"></div>
 </div>
 
-<!-- ══════════════════════ PAGE : HISTORIQUE ════════════════════════ -->
+<!-- PAGE HISTORIQUE -->
 <div class="page" id="page-history">
   <div class="page-header">
     <div style="display:flex;align-items:center;justify-content:space-between">
@@ -167,56 +153,127 @@
         <div class="page-eyebrow">Historique</div>
         <div class="page-title">Mes analyses</div>
       </div>
-      <button class="btn-clear" onclick="SS_APP.clearHistory()" style="padding:7px 13px;border-radius:var(--r-md);border:1px solid var(--bd);background:transparent;color:var(--mu);font-size:11px;font-weight:600">
-        Nettoyer
-      </button>
+      <button onclick="SS_APP.clearHistory()" style="padding:7px 13px;border-radius:var(--r-md);border:1px solid var(--bd);background:transparent;color:var(--mu);font-size:11px;font-weight:600;cursor:pointer">Nettoyer</button>
     </div>
   </div>
   <div id="history-content"></div>
   <div style="height:24px"></div>
 </div>
 
-<!-- ══════════════════════ PAGE : PARAMÈTRES ════════════════════════ -->
+<!-- PAGE PARAMÈTRES -->
 <div class="page" id="page-settings">
   <div class="page-header">
     <div class="page-eyebrow">Configuration</div>
     <div class="page-title">Paramètres</div>
-    <div class="page-sub">Clé API et préférences</div>
+    <div class="page-sub">Fournisseur IA, clé API et préférences</div>
   </div>
 
-  <!-- CLÉ API -->
+  <!-- THÈME -->
   <div class="settings-section">
-    <div class="settings-title">Clé API Anthropic</div>
-    <div style="font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6">
-      Pour utiliser l'analyse IA, tu as besoin d'une clé API Anthropic.<br>
-      Obtiens-la gratuitement sur <b style="color:var(--gr)">console.anthropic.com</b>
-    </div>
-    <div class="api-key-wrap">
-      <input class="api-key-input" id="api-key-input"
-        type="password" placeholder="sk-ant-api03-…"
-        autocomplete="off" autocorrect="off" spellcheck="false">
-      <div class="api-key-actions">
-        <button class="btn-save" onclick="SS_APP.saveApiKey()">Sauvegarder</button>
-        <button class="btn-clear" onclick="SS_APP.clearApiKey()">Effacer</button>
+    <div class="settings-title">Apparence</div>
+    <div class="theme-toggle-row">
+      <div>
+        <div class="settings-label">Thème sombre</div>
+        <div class="settings-sub">Basculer entre clair et sombre</div>
       </div>
-      <div class="api-key-status" id="api-key-status">Non configurée</div>
+      <div class="toggle-switch" id="theme-toggle" onclick="SS_APP.toggleTheme()">
+        <div class="toggle-knob"></div>
+      </div>
     </div>
+  </div>
+
+  <!-- FOURNISSEUR IA -->
+  <div class="settings-section">
+    <div class="settings-title">Fournisseur IA</div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6">
+      Choisis le modèle IA pour tes analyses. Chaque fournisseur a sa propre clé API.
+    </div>
+    <div class="provider-grid" id="provider-grid">
+      <div class="provider-card selected" data-provider="claude" onclick="SS_APP.selectProvider('claude')">
+        <div class="prov-logo">🤖</div>
+        <div class="prov-name">Claude</div>
+        <div class="prov-model">Sonnet 4.6</div>
+        <div class="prov-badge paid">Payant</div>
+      </div>
+      <div class="provider-card" data-provider="mistral" onclick="SS_APP.selectProvider('mistral')">
+        <div class="prov-logo">🌊</div>
+        <div class="prov-name">Mistral AI</div>
+        <div class="prov-model">Small Latest</div>
+        <div class="prov-badge free-tier">1 mois gratuit</div>
+      </div>
+      <div class="provider-card" data-provider="deepseek" onclick="SS_APP.selectProvider('deepseek')">
+        <div class="prov-logo">🔭</div>
+        <div class="prov-name">DeepSeek</div>
+        <div class="prov-model">DeepSeek Chat</div>
+        <div class="prov-badge paid">Très économique</div>
+      </div>
+      <div class="provider-card" data-provider="openrouter" onclick="SS_APP.selectProvider('openrouter')">
+        <div class="prov-logo">🛤️</div>
+        <div class="prov-name">OpenRouter</div>
+        <div class="prov-model">Mistral 7B Free</div>
+        <div class="prov-badge free">100% Gratuit</div>
+      </div>
+    </div>
+
+    <!-- CHAMPS CLÉ API PAR PROVIDER -->
+    <div class="api-fields">
+      <div class="api-field-wrap visible" id="field-claude">
+        <div class="api-field-label">
+          Clé API Anthropic
+          <a href="https://console.anthropic.com" target="_blank">→ Obtenir une clé</a>
+        </div>
+        <input class="api-key-input" id="key-claude" type="password"
+          placeholder="sk-ant-api03-…" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="api-field-wrap" id="field-mistral">
+        <div class="api-field-label">
+          Clé API Mistral AI
+          <a href="https://console.mistral.ai" target="_blank">→ Obtenir une clé</a>
+        </div>
+        <input class="api-key-input" id="key-mistral" type="password"
+          placeholder="Clé Mistral AI…" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="api-field-wrap" id="field-deepseek">
+        <div class="api-field-label">
+          Clé API DeepSeek
+          <a href="https://platform.deepseek.com" target="_blank">→ Obtenir une clé</a>
+        </div>
+        <input class="api-key-input" id="key-deepseek" type="password"
+          placeholder="sk-…" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="api-field-wrap" id="field-openrouter">
+        <div class="api-field-label">
+          Clé API OpenRouter
+          <a href="https://openrouter.ai/keys" target="_blank">→ Obtenir une clé gratuite</a>
+        </div>
+        <input class="api-key-input" id="key-openrouter" type="password"
+          placeholder="sk-or-…" autocomplete="off" autocorrect="off" spellcheck="false">
+        <div style="font-size:11px;color:var(--gr);margin-top:5px">
+          ✓ OpenRouter offre un accès gratuit à Mistral 7B sans carte bancaire.
+        </div>
+      </div>
+    </div>
+    <div class="api-key-actions" style="margin-top:10px">
+      <button class="btn-save" onclick="SS_APP.saveApiKey()">Sauvegarder</button>
+      <button class="btn-clear" onclick="SS_APP.clearApiKey()">Effacer</button>
+    </div>
+    <div class="api-key-status" id="api-key-status">Non configurée</div>
   </div>
 
   <!-- INFOS -->
   <div class="settings-section">
     <div class="settings-title">Informations</div>
     <div class="settings-row">
-      <div><div class="settings-label">Version</div><div class="settings-sub">StockSense AI v1.0</div></div>
+      <div><div class="settings-label">Version</div><div class="settings-sub">StockSense AI v2.0</div></div>
     </div>
     <div class="settings-row">
-      <div><div class="settings-label">Modèle IA</div><div class="settings-sub">Claude Sonnet 4.6 (Anthropic)</div></div>
+      <div><div class="settings-label">Fournisseur actif</div><div class="settings-sub" id="active-provider-label">Claude (Anthropic)</div></div>
     </div>
     <div class="settings-row">
       <div><div class="settings-label">Données</div><div class="settings-sub">BRVM, TSX, NYSE, Euronext, Nikkei, Émergents</div></div>
     </div>
     <div class="settings-row">
-      <div><div class="settings-label">Stockage offline</div><div class="settings-sub">IndexedDB (cache local automatique)</div></div>
+      <div><div class="settings-label">Cache offline</div><div class="settings-sub">IndexedDB automatique</div></div>
     </div>
   </div>
 
@@ -228,19 +285,18 @@
     </button>
   </div>
 
-  <!-- AVERTISSEMENT -->
-  <div style="background:var(--am2);border:1px solid rgba(255,179,64,.3);border-radius:var(--r-md);padding:13px;margin-bottom:12px">
+  <div style="background:var(--am2);border:1px solid rgba(212,134,10,.3);border-radius:var(--r-md);padding:13px;margin-bottom:12px">
     <div style="font-size:12px;color:var(--am);font-weight:700;margin-bottom:5px">⚠️ Avertissement</div>
     <div style="font-size:11px;color:var(--mu);line-height:1.65">
-      StockSense AI est un outil informatif uniquement. Les analyses générées ne constituent pas des conseils financiers officiels. Toujours effectuer vos propres recherches avant d'investir.
+      StockSense AI est un outil informatif uniquement. Les analyses ne constituent pas des conseils financiers officiels. Effectuez toujours vos propres recherches avant d'investir.
     </div>
   </div>
-
   <div style="height:24px"></div>
 </div>
+
 </main>
 
-<!-- ══════════════════════ MODAL ═════════════════════════════════════ -->
+<!-- MODAL -->
 <div class="modal-overlay" id="modal" onclick="SS_UI.closeModalOutside(event)">
   <div class="modal-box">
     <div class="modal-icon" id="m-ico">⚠️</div>
@@ -254,26 +310,16 @@
   </div>
 </div>
 
-<!-- ══════════════════════ BOTTOM NAV ════════════════════════════════ -->
+<!-- BOTTOM NAV -->
 <nav class="bottom-nav">
-  <button class="bn active" id="bn-analyze"  onclick="SS_APP.showPage('analyze')">
-    <div class="bn-icon">🔍</div>ANALYSER
-  </button>
-  <button class="bn" id="bn-markets"  onclick="SS_APP.showPage('markets')">
-    <div class="bn-icon">🌍</div>MARCHÉS
-  </button>
-  <button class="bn" id="bn-guide"    onclick="SS_APP.showPage('guide')">
-    <div class="bn-icon">📖</div>GUIDE
-  </button>
-  <button class="bn" id="bn-history"  onclick="SS_APP.showPage('history')">
-    <div class="bn-icon">📋</div>HISTORIQUE
-  </button>
-  <button class="bn" id="bn-settings" onclick="SS_APP.showPage('settings')">
-    <div class="bn-icon">⚙️</div>PARAMÈTRES
-  </button>
+  <button class="bn active" id="bn-analyze"  onclick="SS_APP.showPage('analyze')"><div class="bn-icon">🔍</div>ANALYSER</button>
+  <button class="bn"        id="bn-markets"  onclick="SS_APP.showPage('markets')"><div class="bn-icon">🌍</div>MARCHÉS</button>
+  <button class="bn"        id="bn-guide"    onclick="SS_APP.showPage('guide')"><div class="bn-icon">📖</div>GUIDE</button>
+  <button class="bn"        id="bn-history"  onclick="SS_APP.showPage('history')"><div class="bn-icon">📋</div>HISTORIQUE</button>
+  <button class="bn"        id="bn-settings" onclick="SS_APP.showPage('settings')"><div class="bn-icon">⚙️</div>PARAMÈTRES</button>
 </nav>
 
-<!-- ══════════════════════ SCRIPTS ═══════════════════════════════════ -->
+<!-- SCRIPTS -->
 <script src="js/hours.js"></script>
 <script src="js/markets.js"></script>
 <script src="js/db.js"></script>
@@ -281,17 +327,15 @@
 <script src="js/ui.js"></script>
 <script src="js/app.js"></script>
 
-<!-- Mettre à jour les dots statut des régions -->
 <script>
-(function updateRegionDots(){
-  const regions = ['brvm','tsx','usa','europe','asie','emergents'];
-  regions.forEach(function(r){
-    const el = document.getElementById('rd-' + r);
-    if(!el) return;
-    const st = window.SS_HOURS && window.SS_HOURS.getMarketStatus(r);
-    if(st) el.style.background = st.isOpen ? '#00D68F' : '#FF4D6A';
+(function updateDots(){
+  ['brvm','tsx','usa','europe','asie','emergents'].forEach(function(r){
+    var el = document.getElementById('rd-' + r);
+    if (!el) return;
+    var st = window.SS_HOURS && window.SS_HOURS.getMarketStatus(r);
+    if (st) el.style.background = st.isOpen ? '#00A86B' : '#E8334A';
   });
-  setTimeout(updateRegionDots, 60000); // Rafraîchir chaque minute
+  setTimeout(updateDots, 60000);
 })();
 </script>
 

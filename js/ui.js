@@ -78,6 +78,19 @@ function renderVerdict(data) {
     </div>
     <span class="conf-val" style="color:${col.text}">${conf}%</span>
   </div>
+  ${data.score_global == null ? '' : `
+  <div class="conf-row" style="margin-top:6px">
+    <span class="conf-label">SCORE GLOBAL</span>
+    <div class="conf-bar-wrap">
+      <div class="conf-bar" style="width:${Math.max(0, Math.min(100, data.score_global))}%;background:${col.text}"></div>
+    </div>
+    <span class="conf-val" style="color:${col.text}">${data.score_global}/100</span>
+  </div>`}
+  ${data.verdict_recalcule ? `
+  <div class="verdict-summary" style="margin-top:9px;opacity:.85;font-size:11px">
+    ⓘ Verdict recalculé à partir des cinq scores (seuil d'achat : 65/100). L'analyse brute
+    annonçait « ${esc(data.decision_ia || '—')} », incohérent avec ses propres notes.
+  </div>` : ''}
 </div>`;
 }
 

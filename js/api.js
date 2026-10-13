@@ -229,21 +229,91 @@ function sanitizeStock(s, i) {
   };
 }
 
+/* ── VERDICT : calcul et cohérence ─────────────────────────────────────
+ * Deux protections contre l'ancrage du modèle.
+ *
+ * 1. Le gabarit envoyé au prompt ne contient plus AUCUNE valeur évaluative.
+ *    Il était auparavant entièrement haussier (decision ACHETER, 4 signaux buy
+ *    sur 6, 5 qualités good sur 6) : sans données de marché réelles, le modèle
+ *    recopiait le gabarit au lieu d'analyser, d'où un verdict « ACHETER »
+ *    quasi systématique quel que soit le titre.
+ * 2. Le verdict final est recalculé à partir des cinq scores que le modèle
+ *    produit lui-même. Un verdict qui contredit ses propres scores est remplacé
+ *    et signalé, au lieu d'être affiché tel quel.
+ */
+const POIDS_SCORES = { technique: 0.25, fondamentaux: 0.25, momentum: 0.20, risque: 0.15, macro: 0.15 };
+const SEUIL_ACHAT  = 65;
+const SEUIL_VENTE  = 40;
+
+function scoreComposite(scores) {
+  let total = 0, poids = 0;
+  for (const k of Object.keys(POIDS_SCORES)) {
+    const v = scores ? scores[k] : null;
+    if (typeof v === 'number' && !isNaN(v)) { total += v * POIDS_SCORES[k]; poids += POIDS_SCORES[k]; }
+  }
+  return poids ? total / poids : null;
+}
+
+function decisionDepuisScore(composite) {
+  if (composite === null) return null;
+  if (composite >= SEUIL_ACHAT) return { decision: 'ACHETER',  decision_color: 'buy'  };
+  if (composite <= SEUIL_VENTE) return { decision: 'VENDRE',   decision_color: 'sell' };
+  return { decision: 'ATTENDRE', decision_color: 'wait' };
+}
+
+const GABARIT_ANALYSE = '{"ticker":"<TICKER>","name":"<nom de la societe>","market":"<marche>","price":"<prix>",'
+  + '"decision":"<ACHETER|VENDRE|ATTENDRE>","decision_color":"<buy|sell|wait>","confidence":<50 a 95>,'
+  + '"summary":"<une phrase de synthese>",'
+  + '"scores":{"technique":<0 a 100>,"fondamentaux":<0 a 100>,"macro":<0 a 100>,"momentum":<0 a 100>,"risque":<0 a 100>},'
+  + '"technicals":[<exactement 6 objets de la forme {"name":"MM200","value":"<valeur>","signal":"<buy|sell|neutral>","label":"<libelle>"}>],'
+  + '"fundamentals":[<exactement 6 objets de la forme {"key":"PER","value":"<valeur>","quality":"<good|bad|neutral|plain>"}>],'
+  + '"catalysts":[<0 a 4 phrases>],"risks":[<0 a 4 phrases>],'
+  + '"price_history":[<20 nombres>],"rsi_history":[<20 nombres>],"volume_history":[<20 nombres>],'
+  + '"full_analysis":"<150 a 200 mots, **mots cles** en gras>"}';
+
+const REGLES_ANALYSE = [
+  'Tu es StockSense AI, analyste boursier.',
+  'FORME : reponds UNIQUEMENT par un objet JSON valide, sans markdown ni backticks. Commence par { et termine par }.',
+  'FOND : le gabarit ne montre que la STRUCTURE. Tout ce qui est entre < > est un jeton a remplacer : ne recopie jamais un jeton tel quel.',
+  'OBJECTIVITE : la decision doit decouler des cinq scores que tu produis. Si technique, fondamentaux et momentum sont majoritairement faibles, la decision est VENDRE ou ATTENDRE, jamais ACHETER.',
+  'DIVERSITE : une action survaluee, endettee ou en tendance baissiere donne VENDRE ou ATTENDRE. Le verdict ACHETER doit rester l exception, pas la regle.',
+  'ESPRIT CRITIQUE : cite au moins 2 risques concrets et retiens au moins un signal sell si la valeur en presente un.'
+].join(' ');
+
 // ── ANALYSE D'UNE ACTION ────────────────────────────────────────────
 async function analyzeStock(providerId, apiKey, ticker, market, intent) {
   const imap = { buy:"L'utilisateur souhaite ACHETER.", sell:"L'utilisateur souhaite VENDRE.", watch:"L'utilisateur surveille." };
   const prov = PROVIDERS[providerId] || PROVIDERS.claude;
 
-  const exJSON = '{"ticker":"SNTS","name":"SONATEL SN","market":"BRVM","price":"31 710 FCFA","decision":"ACHETER","decision_color":"buy","confidence":78,"summary":"SONATEL affiche des fondamentaux solides.","scores":{"technique":72,"fondamentaux":80,"macro":65,"momentum":70,"risque":75},"technicals":[{"name":"MM200","value":"29 500 FCFA","signal":"buy","label":"Haussier"},{"name":"RSI(14)","value":"58","signal":"neutral","label":"Neutre"},{"name":"MACD","value":"Positif","signal":"buy","label":"Achat"},{"name":"Volume","value":"Eleve","signal":"buy","label":"Fort"},{"name":"Bollinger","value":"Zone centrale","signal":"neutral","label":"Neutre"},{"name":"Tendance","value":"Haussiere","signal":"buy","label":"Haussier"}],"fundamentals":[{"key":"PER","value":"7.8","quality":"good"},{"key":"Dividende","value":"5.5%","quality":"good"},{"key":"ROE","value":"22%","quality":"good"},{"key":"Dette/FP","value":"0.4","quality":"good"},{"key":"Croissance CA","value":"+8%","quality":"good"},{"key":"Secteur","value":"Telecoms","quality":"plain"}],"catalysts":["Expansion Orange Money","Resultats T2 positifs","Dividende juillet"],"risks":["Concurrence regionale","Risque reglementaire","Exposition CFA"],"price_history":[28000,28500,29000,28800,29200,29800,30100,29900,30200,30500,30800,31000,30700,31100,31300,31500,31200,31600,31800,31710],"rsi_history":[45,48,52,50,55,58,60,57,62,65,63,60,58,61,64,66,62,59,58,58],"volume_history":[100,120,90,110,130,150,140,160,170,145,155,180,165,190,175,200,185,210,195,205],"full_analysis":"**SONATEL SN** est le pilier de la BRVM avec des fondamentaux solides."}';
 
-  const sys = 'Tu es StockSense AI, analyste boursier expert BRVM et TSX. Contexte: juillet 2026. REGLE ABSOLUE: reponds UNIQUEMENT avec un objet JSON valide, sans markdown ni backticks. Commence par { et termine par }.';
-  const msg = 'Analyse l\'action ' + ticker + ' sur ' + (market==='AUTO'?'BRVM ou TSX selon le ticker':market) + '. ' + (imap[intent]||'') + '\nMeme structure JSON que cet exemple: ' + exJSON + '\nRemplace avec les donnees reelles de ' + ticker + ' en juillet 2026. signal: buy/sell/neutral. quality: good/bad/neutral/plain. 20 nombres dans chaque historique. full_analysis 150-200 mots avec **mots cles** en gras. JSON pur uniquement.';
+  const sys = REGLES_ANALYSE;
+  const msg = 'Analyse l\'action ' + ticker + ' sur ' + (market === 'AUTO' ? 'le marche le plus pertinent pour ce ticker' : market)
+    + '. ' + (imap[intent] || '')
+    + '\nGabarit a remplir (structure seule, aucun jeton a recopier) : ' + GABARIT_ANALYSE
+    + '\nRemplace chaque jeton < > par ta propre analyse de ' + ticker + '. '
+    + 'signal: buy/sell/neutral. quality: good/bad/neutral/plain. '
+    + 'Exactement 20 nombres par historique. full_analysis 150-200 mots avec **mots cles** en gras. JSON pur uniquement.';
 
   const raw = await callProvider(providerId, apiKey, sys, msg);
   const parsed = parseJSONSafe(raw);
   if (!parsed) throw new Error('Reponse IA invalide. Reessaie.');
   const result = sanitizeAnalysis(parsed, ticker, market);
   if (!result) throw new Error('Donnees IA incompletes. Reessaie.');
+
+  // Cohérence : le verdict est recalcule a partir des scores. S'il contredit
+  // ses propres scores, c'est le verdict calcule qui est retenu et l'ecart
+  // est signale a l'utilisateur plutot que masque.
+  const composite = scoreComposite(result.scores);
+  result.score_global = composite === null ? null : Math.round(composite);
+  const calcule = decisionDepuisScore(composite);
+  if (calcule && calcule.decision_color !== result.decision_color) {
+    result.decision_ia = result.decision;
+    result.decision = calcule.decision;
+    result.decision_color = calcule.decision_color;
+    result.verdict_recalcule = true;
+  } else {
+    result.verdict_recalcule = false;
+  }
   return result;
 }
 
@@ -254,10 +324,19 @@ async function fetchRegionData(providerId, apiKey, region) {
   const fb   = FALLBACK[region];
 
   const devises = {brvm:'FCFA',tsx:'$CAD',usa:'$USD',europe:'EUR',asie:'devise locale (JPY/HKD/TWD/KRW)',emergents:'devise locale (INR/ZAR/BRL/MAD/KES)'};
-  const exStock = JSON.stringify(fb.stocks[0]);
+  // Gabarit neutre. L'ancien prenait FALLBACK[region].stocks[0], dont le signal
+  // vaut 'b' (ACHETER) dans les six regions : le modele recopiait ce signal et
+  // les six listes sortaient integralement haussieres.
+  const exStock = '{"ticker":"<TICKER>","name":"<nom>","price":"<prix>",'
+    + '"change":"<+x% ou -x%>","change_dir":"<up|dn|fl>","sector":"<secteur>",'
+    + '"per":"<valeur|N/D>","dividend":"<valeur|N/D>","signal":"<b|s|h>",'
+    + '"signal_label":"<ACHETER|VENDRE|CONSERVER>","why":"<une phrase>"}';
 
   const sys = 'Tu es analyste boursier expert specialise sur ' + info.label + '. REGLE ABSOLUE: reponds UNIQUEMENT avec un objet JSON valide, sans markdown ni backticks. Commence par { et termine par }.';
-  const msg = 'Genere un JSON listant les 6 meilleures actions de ' + info.label + ' en juillet 2026.\nContexte: ' + info.context + '\nIMPORTANT: Prix en ' + (devises[region]||'devise locale') + ' UNIQUEMENT. N\'utilise jamais FCFA ni tickers BRVM pour un marche non-BRVM.\nFormat JSON exact:\n{"region":"' + region + '","label":"' + info.label + '","summary":"1 phrase sur le contexte actuel","stocks":[' + exStock + ',...5 autres actions]}\nRegles: signal b=acheter s=vendre h=conserver, change_dir up/dn/fl, 6 actions exactement, JSON pur.';
+  const msg = 'Genere un JSON listant les 6 meilleures actions de ' + info.label + ' en juillet 2026.\nContexte: ' + info.context + '\nIMPORTANT: Prix en ' + (devises[region]||'devise locale') + ' UNIQUEMENT. N\'utilise jamais FCFA ni tickers BRVM pour un marche non-BRVM.\nFormat JSON exact:\n{"region":"' + region + '","label":"' + info.label + '","summary":"1 phrase sur le contexte actuel","stocks":[' + exStock + ',...5 autres actions]}\nRegles: signal b=acheter s=vendre h=conserver, change_dir up/dn/fl, 6 actions exactement, JSON pur. '
+    + 'DIVERSITE OBLIGATOIRE: les 6 actions ne doivent pas toutes porter le meme signal '
+    + 'ni le meme sens de variation. Repartis-les selon la situation reelle de chacune, '
+    + 'et n recopie aucun jeton < > du gabarit.';
 
   const raw = await callProvider(providerId, apiKey, sys, msg);
   const p = parseJSONSafe(raw);
@@ -298,4 +377,4 @@ async function testKey(providerId, apiKey) {
   }
 }
 
-window.SS_API = { PROVIDERS, analyzeStock, fetchRegionData, testKey };
+window.SS_API = { PROVIDERS, analyzeStock, fetchRegionData, testKey, scoreComposite, decisionDepuisScore };

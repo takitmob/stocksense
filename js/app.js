@@ -149,6 +149,7 @@ function refreshSettingsUI() {
     const prov = SS_API.PROVIDERS[pid];
     provLabel.textContent = prov ? prov.name + ' — ' + prov.model : pid;
   }
+  refreshQuotesUI();
 }
 
 function saveApiKey() {
@@ -197,6 +198,63 @@ async function testerCle() {
 }
 
 function getActiveKey() { return STATE.apiKeys[STATE.provider] || ''; }
+
+/* ── CLÉ DE DONNÉES DE MARCHÉ ──────────────────────────────────────────
+ * Distincte des clés de modèle : c'est une source de cotations, pas un LLM.
+ * Une seule famille de sources gratuites est utilisable depuis un navigateur
+ * (CORS) — voir l'en-tête de js/quotes.js. */
+function refreshQuotesUI() {
+  const el = document.getElementById('quotes-key-status');
+  if (!el || !window.SS_QUOTES) return;
+  if (window.SS_QUOTES.quotesCleEnregistree()) {
+    el.textContent = '✓ Clé configurée — les analyses porteront sur des cotations réelles.';
+    el.style.color = 'var(--gr)';
+  } else {
+    el.textContent = 'Aucune clé : les analyses restent indicatives, aucun prix réel n\'est injecté.';
+    el.style.color = 'var(--mu)';
+  }
+}
+
+function saveQuotesKey() {
+  const inp = document.getElementById('quotes-key');
+  const val = ((inp && inp.value) || '').trim();
+  if (!val) { SS_UI.showToast('⚠️ Entre une clé de données de marché'); return; }
+  window.SS_QUOTES.quotesEnregistrerCle(val);
+  if (inp) inp.value = '';
+  refreshQuotesUI();
+  SS_UI.showToast('✓ Clé de données de marché sauvegardée');
+}
+
+function clearQuotesKey() {
+  window.SS_QUOTES.quotesEnregistrerCle('');
+  const inp = document.getElementById('quotes-key');
+  if (inp) inp.value = '';
+  refreshQuotesUI();
+  SS_UI.showToast('Clé de données de marché supprimée');
+}
+
+/* Test réel : on demande une cotation connue et on remonte la réponse de la
+ * source. C'est le seul contrôle fiable — l'endpoint /exchanges répond 200 même
+ * avec une clé bidon. */
+async function testerQuotesCle() {
+  const sortie = document.getElementById('quotes-test');
+  if (!window.SS_QUOTES.quotesCleEnregistree()) {
+    if (sortie) { sortie.textContent = '⚠️ Aucune clé enregistrée.'; sortie.style.color = 'var(--am)'; }
+    return;
+  }
+  if (sortie) { sortie.textContent = '⏳ Test de la source de cotations…'; sortie.style.color = 'var(--mu)'; }
+  const r = await window.SS_QUOTES.quotesCharger('AAPL', 'usa', { force: true });
+  if (sortie) {
+    if (r && r.ok) {
+      sortie.textContent = '✓ ' + r.source + ' répond : AAPL ' + r.prix + ' ' + (r.devise || '')
+        + ' · RSI(14) ' + (r.rsiActuel == null ? '—' : r.rsiActuel);
+      sortie.style.color = 'var(--gr)';
+    } else {
+      sortie.textContent = '✗ ' + ((r && r.erreur) || 'échec du test');
+      sortie.style.color = 'var(--re)';
+    }
+  }
+}
 
 // ── ANALYSE PRINCIPALE ────────────────────────────────────────────────
 const STEPS = [
@@ -258,8 +316,20 @@ async function runAnalysis() {
     if (step >= STEPS.length) clearInterval(_stepTimer);
   }, 700);
 
+  // Données de marché réelles : récupérées AVANT l'appel au modèle, pour les lui
+  // donner comme des faits mesurés. Sans clé de données, ou sur un marché non
+  // couvert (la BRVM), on continue en mode indicatif — et l'app le dit.
+  const regionQ = (MARCHES.find((m) => m.value === market) || {}).region || null;
+  let faits = null;
+  if (window.SS_QUOTES && window.SS_QUOTES.quotesCleEnregistree()) {
+    if (provLbl) provLbl.textContent = 'Récupération des cotations réelles…';
+    try { faits = await window.SS_QUOTES.quotesCharger(ticker, regionQ); } catch (e) { faits = null; }
+    if (provLbl) provLbl.textContent = 'Analyse via ' + (SS_API.PROVIDERS[pid]?.name || pid) + '…';
+  }
+  STATE.lastFaits = faits;
+
   try {
-    const data = await SS_API.analyzeStock(pid, apiKey, ticker, market, STATE.intent);
+    const data = await SS_API.analyzeStock(pid, apiKey, ticker, market, STATE.intent, faits);
     clearInterval(_stepTimer);
     STATE.currentData = data;
     await SS_DB.saveAnalysis(ticker, market, STATE.intent, data);
@@ -671,6 +741,7 @@ async function init() {
 window.SS_APP = {
   showPage, toggleTheme, setIntent, quickPick, runAnalysis, resetAnalysis,
   swTab, switchChart, selectProvider, saveApiKey, clearApiKey, testerCle,
+  saveQuotesKey, clearQuotesKey, testerQuotesCle,
   selectRegion, refreshMarket, loadRegion, showMarketInfo,
   analyzeFromMarket, toggleGuide, loadFromHistory, clearHistory, init
 };

@@ -91,6 +91,14 @@ function renderVerdict(data) {
     ⓘ Verdict recalculé à partir des cinq scores (seuil d'achat : 65/100). L'analyse brute
     annonçait « ${esc(data.decision_ia || '—')} », incohérent avec ses propres notes.
   </div>` : ''}
+  ${data.donneesReelles ? `
+  <div class="verdict-summary" style="margin-top:9px;font-size:11px">
+    ✅ Cotations réelles — ${esc(data.source || 'source de marché')}${data.sourceDate ? ' · ' + esc(data.sourceDate) : ''}${data.rsiCalcule == null ? '' : ' · RSI(14) mesuré ' + esc(data.rsiCalcule)}
+  </div>` : `
+  <div class="verdict-summary" style="margin-top:9px;font-size:11px;opacity:.85">
+    ⚠️ Analyse indicative : aucun prix réel n'a pu être injecté (clé de données de marché absente,
+    ou marché non couvert comme la BRVM). Les chiffres sont ceux du modèle, pas des cotations.
+  </div>`}
 </div>`;
 }
 

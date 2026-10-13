@@ -279,6 +279,31 @@
     <div class="api-key-status" id="api-key-test" style="color:var(--mu)"></div>
   </div>
 
+  <!-- DONNÉES DE MARCHÉ -->
+  <div class="settings-section">
+    <div class="settings-title">Données de marché</div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6">
+      Sans clé, l'IA <b>estime</b> les prix : l'analyse reste indicative. Avec une clé, les
+      cotations, les volumes, le RSI(14) et les moyennes mobiles sont <b>réels et mesurés</b>.
+    </div>
+    <div class="api-field-label">
+      Clé API Twelve Data
+      <a href="https://twelvedata.com/pricing" target="_blank">→ Créer une clé gratuite</a>
+    </div>
+    <input class="api-key-input" id="quotes-key" type="password"
+      placeholder="Colle ta clé Twelve Data…" autocomplete="off" autocorrect="off" spellcheck="false">
+    <div class="api-key-actions" style="margin-top:10px">
+      <button class="btn-save" onclick="SS_APP.saveQuotesKey()">Sauvegarder</button>
+      <button class="btn-clear" onclick="SS_APP.testerQuotesCle()">Tester la source</button>
+      <button class="btn-clear" onclick="SS_APP.clearQuotesKey()">Effacer</button>
+    </div>
+    <div class="api-key-status" id="quotes-key-status">Aucune clé</div>
+    <div class="api-key-status" id="quotes-test" style="color:var(--mu)"></div>
+    <div style="font-size:11px;color:var(--am);margin-top:8px">
+      ⚠️ Aucune source gratuite ne couvre la BRVM : sur ce marché, les analyses restent indicatives.
+    </div>
+  </div>
+
   <!-- INFOS -->
   <div class="settings-section">
     <div class="settings-title">Informations</div>
@@ -342,6 +367,7 @@
 <script src="js/hours.js"></script>
 <script src="js/markets.js"></script>
 <script src="js/db.js"></script>
+<script src="js/quotes.js"></script>
 <script src="js/api.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/app.js"></script>

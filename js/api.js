@@ -281,7 +281,7 @@ const REGLES_ANALYSE = [
 ].join(' ');
 
 // ── ANALYSE D'UNE ACTION ────────────────────────────────────────────
-async function analyzeStock(providerId, apiKey, ticker, market, intent) {
+async function analyzeStock(providerId, apiKey, ticker, market, intent, faits) {
   const imap = { buy:"L'utilisateur souhaite ACHETER.", sell:"L'utilisateur souhaite VENDRE.", watch:"L'utilisateur surveille." };
   const prov = PROVIDERS[providerId] || PROVIDERS.claude;
 
@@ -289,6 +289,7 @@ async function analyzeStock(providerId, apiKey, ticker, market, intent) {
   const sys = REGLES_ANALYSE;
   const msg = 'Analyse l\'action ' + ticker + ' sur ' + (market === 'AUTO' ? 'le marche le plus pertinent pour ce ticker' : market)
     + '. ' + (imap[intent] || '')
+    + (faits && faits.ok ? '\n' + window.SS_QUOTES.quotesBlocPrompt(faits) + '\n' : '\nAUCUNE DONNEE DE MARCHE REELLE n est fournie : signale-le dans le resume en precisant que tes chiffres sont indicatifs.\n')
     + '\nGabarit a remplir (structure seule, aucun jeton a recopier) : ' + GABARIT_ANALYSE
     + '\nRemplace chaque jeton < > par ta propre analyse de ' + ticker + '. '
     + 'signal: buy/sell/neutral. quality: good/bad/neutral/plain. '
@@ -299,6 +300,23 @@ async function analyzeStock(providerId, apiKey, ticker, market, intent) {
   if (!parsed) throw new Error('Reponse IA invalide. Reessaie.');
   const result = sanitizeAnalysis(parsed, ticker, market);
   if (!result) throw new Error('Donnees IA incompletes. Reessaie.');
+
+  // Faits de marché : on les rattache au résultat, et on remplace les séries
+  // inventées par les vraies. Le graphique et les scores portent alors sur des
+  // données mesurées, plus sur une reconstitution du modèle.
+  result.donneesReelles = !!(faits && faits.ok);
+  if (faits && faits.ok) {
+    result.source = faits.source;
+    result.sourceDate = faits.date;
+    result.devise = faits.devise;
+    result.rsiCalcule = faits.rsiActuel;
+    // le champ lu par l'interface s'appelle `price` (js/ui.js) — ne pas confondre
+    result.price = (faits.prix != null ? String(faits.prix) : result.price)
+      + (faits.devise ? ' ' + faits.devise : '');
+    if (faits.clotures && faits.clotures.length >= 2) result.price_history = faits.clotures;
+    if (faits.rsi && faits.rsi.length >= 2) result.rsi_history = faits.rsi.slice(-20);
+    if (faits.volumes && faits.volumes.length >= 2) result.volume_history = faits.volumes;
+  }
 
   // Cohérence : le verdict est recalcule a partir des scores. S'il contredit
   // ses propres scores, c'est le verdict calcule qui est retenu et l'ecart

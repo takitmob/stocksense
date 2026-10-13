@@ -62,6 +62,10 @@
       <select id="marketSelect">
         <option value="BRVM">🌍 BRVM</option>
         <option value="TSX">🍁 TSX</option>
+        <option value="USA">🇺🇸 États-Unis</option>
+        <option value="Europe">🇪🇺 Europe</option>
+        <option value="Asie">🌏 Asie</option>
+        <option value="Émergents">🌐 Émergents</option>
         <option value="AUTO">🔍 Auto</option>
       </select>
     </div>
@@ -198,11 +202,11 @@
       Choisis le modèle IA pour tes analyses. Chaque fournisseur a sa propre clé API.
     </div>
     <div class="provider-grid" id="provider-grid">
-      <div class="provider-card selected" data-provider="claude" onclick="SS_APP.selectProvider('claude')">
+      <div class="provider-card" data-provider="claude" onclick="SS_APP.selectProvider('claude')">
         <div class="prov-logo">🤖</div>
         <div class="prov-name">Claude</div>
         <div class="prov-model">Sonnet 4.6</div>
-        <div class="prov-badge paid">Payant</div>
+        <div class="prov-badge free-tier">Bloqué (CORS)</div>
       </div>
       <div class="provider-card" data-provider="mistral" onclick="SS_APP.selectProvider('mistral')">
         <div class="prov-logo">🌊</div>
@@ -210,11 +214,11 @@
         <div class="prov-model">Small Latest</div>
         <div class="prov-badge free-tier">1 mois gratuit</div>
       </div>
-      <div class="provider-card" data-provider="deepseek" onclick="SS_APP.selectProvider('deepseek')">
+      <div class="provider-card selected" data-provider="deepseek" onclick="SS_APP.selectProvider('deepseek')">
         <div class="prov-logo">🔭</div>
         <div class="prov-name">DeepSeek</div>
         <div class="prov-model">DeepSeek Chat</div>
-        <div class="prov-badge paid">Très économique</div>
+        <div class="prov-badge paid">Recommandé</div>
       </div>
       <div class="provider-card" data-provider="openrouter" onclick="SS_APP.selectProvider('openrouter')">
         <div class="prov-logo">🛤️</div>
@@ -226,13 +230,17 @@
 
     <!-- CHAMPS CLÉ API PAR PROVIDER -->
     <div class="api-fields">
-      <div class="api-field-wrap visible" id="field-claude">
+      <div class="api-field-wrap" id="field-claude">
         <div class="api-field-label">
           Clé API Anthropic
           <a href="https://console.anthropic.com" target="_blank">→ Obtenir une clé</a>
         </div>
         <input class="api-key-input" id="key-claude" type="password"
           placeholder="sk-ant-api03-…" autocomplete="off" autocorrect="off" spellcheck="false">
+        <div style="font-size:11px;color:var(--am);margin-top:5px">
+          ⚠️ Anthropic refuse les appels directs depuis un navigateur (CORS) : cette clé ne peut pas
+          débloquer les analyses dans cette app. Utilise DeepSeek à la place.
+        </div>
       </div>
       <div class="api-field-wrap" id="field-mistral">
         <div class="api-field-label">
@@ -242,7 +250,7 @@
         <input class="api-key-input" id="key-mistral" type="password"
           placeholder="Clé Mistral AI…" autocomplete="off" autocorrect="off" spellcheck="false">
       </div>
-      <div class="api-field-wrap" id="field-deepseek">
+      <div class="api-field-wrap visible" id="field-deepseek">
         <div class="api-field-label">
           Clé API DeepSeek
           <a href="https://platform.deepseek.com" target="_blank">→ Obtenir une clé</a>
@@ -264,9 +272,39 @@
     </div>
     <div class="api-key-actions" style="margin-top:10px">
       <button class="btn-save" onclick="SS_APP.saveApiKey()">Sauvegarder</button>
+      <button class="btn-clear" onclick="SS_APP.testerCle()">Tester la clé</button>
       <button class="btn-clear" onclick="SS_APP.clearApiKey()">Effacer</button>
     </div>
     <div class="api-key-status" id="api-key-status">Non configurée</div>
+    <div class="api-key-status" id="api-key-test" style="color:var(--mu)"></div>
+  </div>
+
+  <!-- DONNÉES DE MARCHÉ -->
+  <div class="settings-section">
+    <div class="settings-title">Données de marché</div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6">
+      Sans clé, l'IA <b>estime</b> les prix : l'analyse reste indicative. Avec une clé, les
+      cotations, les volumes, le RSI(14) et les moyennes mobiles sont <b>réels et mesurés</b>.
+    </div>
+    <div class="api-field-label">
+      Clé API Twelve Data
+      <a href="https://twelvedata.com/pricing" target="_blank">→ Créer une clé gratuite</a>
+    </div>
+    <input class="api-key-input" id="quotes-key" type="password"
+      placeholder="Colle ta clé Twelve Data…" autocomplete="off" autocorrect="off" spellcheck="false">
+    <div class="api-key-actions" style="margin-top:10px">
+      <button class="btn-save" onclick="SS_APP.saveQuotesKey()">Sauvegarder</button>
+      <button class="btn-clear" onclick="SS_APP.testerQuotesCle()">Tester la source</button>
+      <button class="btn-clear" onclick="SS_APP.clearQuotesKey()">Effacer</button>
+    </div>
+    <div class="api-key-status" id="quotes-key-status">Aucune clé</div>
+    <div class="api-key-status" id="quotes-test" style="color:var(--mu)"></div>
+    <div style="font-size:11px;color:var(--mu);margin-top:10px;line-height:1.55">
+      <b style="color:var(--gr)">La BRVM ne demande aucune clé.</b> Ses cours de clôture sont extraits
+      de brvm.org chaque séance par un runner GitHub Actions, puis publiés dans le dépôt :
+      l'app les lit depuis sa propre origine. L'historique se construit séance après séance —
+      le RSI BRVM devient calculable au bout d'une quinzaine de séances.
+    </div>
   </div>
 
   <!-- INFOS -->
@@ -332,6 +370,7 @@
 <script src="js/hours.js"></script>
 <script src="js/markets.js"></script>
 <script src="js/db.js"></script>
+<script src="js/quotes.js"></script>
 <script src="js/api.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/app.js"></script>

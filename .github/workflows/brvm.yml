@@ -1,0 +1,69 @@
+name: Instantané BRVM
+
+# La BRVM n'est couverte par aucune source de cotations gratuite et compatible
+# navigateur. brvm.org publie en revanche ses cours en HTML statique. Ce runner
+# joue donc le rôle du relais : il est CÔTÉ SERVEUR, donc hors contrainte CORS,
+# et il dépose les cours dans le dépôt. L'app les lit ensuite depuis sa propre
+# origine — aucun relais à administrer, aucun quota, aucun certificat à gérer.
+#
+# Le marché BRVM cote une fois par jour : un instantané quotidien est la bonne
+# granularité. Le script n'utilise que la bibliothèque standard de Python, ce
+# qui évite toute dépendance à installer dans l'intégration continue.
+
+on:
+  schedule:
+    # après la clôture BRVM (la cote de la séance est publiée en fin de journée)
+    - cron: '30 18 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: brvm
+  cancel-in-progress: false
+
+jobs:
+  instantane:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Récupérer les cours du jour
+        run: python3 tools/brvm_snapshot.py data/brvm.json data/brvm-history.json
+
+      - name: Publier si les données ont changé
+        run: |
+          if [ ! -s data/brvm.json ]; then
+            echo "instantané vide — rien à publier"; exit 1
+          fi
+          git config user.name  "brvm-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "aucun changement de cours depuis la dernière séance"
+          else
+            git commit -m "données BRVM : séance du $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Résumé
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("data/brvm.json")
+          if not p.exists():
+              print("aucun instantané"); raise SystemExit
+          d = json.loads(p.read_text())
+          h = pathlib.Path("data/brvm-history.json")
+          hh = json.loads(h.read_text()) if h.exists() else {}
+          print(f"récupéré : {d['recupere']}")
+          print(f"valeurs  : {d['nombre']} · indices : {len(d.get('indices', []))}")
+          print(f"recoupement Top/Flop : {d.get('ecarts_topflop') or 'concordant'}")
+          print(f"séances cumulées : {len(hh.get('sessions', []))}")
+          PY

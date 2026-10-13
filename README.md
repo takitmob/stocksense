@@ -1,6 +1,6 @@
 # StockSense AI 📊
 
-Progressive Web App d'analyse boursière alimentée par Claude AI (Anthropic).
+Progressive Web App d'analyse boursière alimentée par IA — **DeepSeek par défaut**, multi-fournisseurs (DeepSeek, Mistral, OpenRouter).
 
 **Marchés couverts :** BRVM · TSX · NYSE/NASDAQ · Europe · Asie · Marchés Émergents
 
@@ -65,14 +65,30 @@ L'app s'ouvre en plein écran, comme une app native.
 
 ## 🔑 Configuration de la clé API
 
-L'app nécessite une clé API Anthropic pour les analyses IA.
+L'app est multi-fournisseurs : **DeepSeek** (par défaut), Mistral, OpenRouter et Claude.
+Une seule clé suffit — celle du fournisseur que tu choisis.
 
-1. Va sur [console.anthropic.com](https://console.anthropic.com)
+> ⚠️ **Anthropic (Claude) ne peut pas fonctionner depuis cette app.** Son API refuse les
+> appels venant d'un navigateur (aucun en-tête CORS au préflight), quel que soit le
+> contenu de la clé. Il faudrait un relais côté serveur. **Utilise DeepSeek.**
+
+### DeepSeek (recommandé — c'est le défaut)
+
+1. Va sur [platform.deepseek.com](https://platform.deepseek.com)
 2. Crée un compte → **API Keys** → **Create Key**
-3. Copie la clé (commence par `sk-ant-...`)
-4. Dans l'app → onglet **⚙️ Paramètres** → colle la clé → **Sauvegarder**
+3. Copie la clé (commence par `sk-...`)
+4. Dans l'app → onglet **⚙️ Paramètres** → fournisseur **DeepSeek** → colle la clé → **Sauvegarder**
+5. Appuie sur **Tester la clé** : le bouton fait une vraie mini-requête et affiche le
+   résultat. C'est la seule vérification fiable — lister les modèles ne prouve rien.
 
-> La clé est stockée uniquement dans ton navigateur (localStorage). Elle n'est jamais envoyée ailleurs qu'à l'API Anthropic.
+### OpenRouter (gratuit, modèle plus faible)
+
+OpenRouter offre un accès gratuit sans carte bancaire : [openrouter.ai/keys](https://openrouter.ai/keys).
+Le modèle gratuit est plus petit : il respecte moins bien le format JSON strict exigé
+par l'app, attends-toi à quelques « Réponse inattendue ».
+
+> La clé est stockée uniquement dans **ton** navigateur (localStorage) et n'est envoyée
+> qu'au fournisseur que tu as sélectionné.
 
 ---
 
@@ -84,7 +100,7 @@ L'app nécessite une clé API Anthropic pour les analyses IA.
 - Verdict clair avec niveau de confiance
 - 5 scores visuels (Technique, Fondamentaux, Macro, Momentum, Risque)
 - Graphique interactif Prix / RSI / Volume
-- Analyse détaillée texte de Claude AI
+- Analyse détaillée texte générée par l'IA
 
 ### Onglet Marchés
 - 6 régions : BRVM, Canada, USA, Europe, Asie, Émergents
@@ -121,7 +137,7 @@ stocksense-pwa/
 │   ├── hours.js        ← Horaires boursiers 6 régions
 │   ├── markets.js      ← Config régions + données fallback
 │   ├── db.js           ← Cache IndexedDB
-│   ├── api.js          ← Appels Claude API (analyse + marchés)
+│   ├── api.js          ← Appels API IA (analyse + marchés) — 4 fournisseurs, clé testable
 │   ├── ui.js           ← Rendu HTML (verdict, chart, cartes)
 │   └── app.js          ← Orchestration, navigation, état
 └── icons/

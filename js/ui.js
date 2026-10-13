@@ -5,7 +5,10 @@ function esc(s) {
   if (!s) return '';
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    // L'apostrophe manquait : `renderStockCard` injecte le ticker dans un
+    // attribut onclick="fn('…')" — un ticker en contenant cassait l'attribut.
+    .replace(/'/g,'&#39;').replace(/`/g,'&#96;');
 }
 
 // ── COULEURS ──────────────────────────────────────────────────────────
@@ -351,6 +354,18 @@ function closeModalOutside(e) {
 }
 
 // ── HANDLE ERRORS ─────────────────────────────────────────────────────
+/* Nom lisible du fournisseur actif. Le message d'erreur 401 disait « Vérifie ta
+ * clé Anthropic » en dur, même avec DeepSeek ou OpenRouter sélectionné. */
+function nomFournisseurActif() {
+  try {
+    const pid = (typeof STATE !== 'undefined' && STATE.provider) || '';
+    const prov = window.SS_API && pid ? SS_API.PROVIDERS[pid] : null;
+    return prov ? prov.name : 'API';
+  } catch (e) {
+    return 'API';
+  }
+}
+
 function handleError(e, label, retryFn) {
   const msg  = String(e && e.message || '');
   const isNet  = /fetch|Failed|OFFLINE|network/i.test(msg);
@@ -364,7 +379,7 @@ function handleError(e, label, retryFn) {
              : is529  ? { ico:'⏳', title:'Service surchargé',         msg:'Trop de demandes. Attends 1 minute.',           hint:'<b>Que faire ?</b><br>Attends 60 secondes puis réessaie.', retry:true }
              : is500  ? { ico:'🔧', title:'Service indisponible',       msg:'Les serveurs sont momentanément surchargés.',   hint:'<b>Que faire ?</b><br>Attends 30 secondes puis réessaie.', retry:true }
              : is429  ? { ico:'🚦', title:'Limite atteinte',            msg:'Trop d\'analyses rapprochées. Patiente 2 min.', hint:'<b>Que faire ?</b><br>Attends 2 minutes.', retry:true }
-             : is401  ? { ico:'🔑', title:'Clé API invalide',           msg:'Vérifie ta clé Anthropic dans les paramètres.', hint:'Va dans ⚙️ Paramètres → entre ta clé API.', retry:false }
+             : is401  ? { ico:'🔑', title:'Clé API invalide',           msg:'Vérifie ta clé ' + nomFournisseurActif() + ' dans les paramètres.', hint:'Va dans ⚙️ Paramètres → entre ta clé API.', retry:false }
              : isJSON ? { ico:'🔄', title:'Réponse inattendue',         msg:'Format IA inattendu pour ' + label + '.',       hint:'Appuie sur Réessayer — fonctionne dans 95% des cas.', retry:true }
              :          { ico:'😕', title:'Erreur inattendue',          msg:'L\'analyse de ' + label + ' a échoué.',         hint:'<b>Que faire ?</b><br>Réessaie ou utilise les accès rapides.', retry:true };
 

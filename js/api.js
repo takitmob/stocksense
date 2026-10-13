@@ -9,6 +9,11 @@ const PROVIDERS = {
     keyPrefix: 'sk-ant',
     isFree: false,
     badge: 'Payant',
+    // Mesuré : le préflight CORS d'Anthropic ne renvoie aucun
+    // Access-Control-Allow-Origin, même avec les en-têtes de cette app.
+    // Un site statique ne peut donc pas l'appeler — il faut un relais serveur.
+    browserOk: false,
+    note: 'Appel direct refusé par le navigateur (CORS) — nécessite un relais.',
     buildRequest: (apiKey, sys, msg) => ({
       url: 'https://api.anthropic.com/v1/messages',
       opts: {
@@ -31,6 +36,7 @@ const PROVIDERS = {
     keyPrefix: '',
     isFree: false,
     badge: 'Gratuit 1 mois',
+    browserOk: true,
     buildRequest: (apiKey, sys, msg) => ({
       url: 'https://api.mistral.ai/v1/chat/completions',
       opts: {
@@ -52,6 +58,7 @@ const PROVIDERS = {
     keyPrefix: 'sk-',
     isFree: false,
     badge: 'Très économique',
+    browserOk: true,
     buildRequest: (apiKey, sys, msg) => ({
       url: 'https://api.deepseek.com/v1/chat/completions',
       opts: {
@@ -73,6 +80,7 @@ const PROVIDERS = {
     keyPrefix: 'sk-or',
     isFree: true,
     badge: '100% Gratuit',
+    browserOk: true,
     buildRequest: (apiKey, sys, msg) => ({
       url: 'https://openrouter.ai/api/v1/chat/completions',
       opts: {
@@ -262,4 +270,32 @@ async function fetchRegionData(providerId, apiKey, region) {
   return p;
 }
 
-window.SS_API = { PROVIDERS, analyzeStock, fetchRegionData };
+// ── TEST D'UNE CLÉ ──────────────────────────────────────────────────
+/* Valide une clé par une vraie mini-génération. Lister les modèles ne prouve
+ * RIEN : certaines API répondent 200 avec une clé bidon. Renvoie { ok, message }
+ * et ne jette jamais — l'appelant affiche le message tel quel. */
+async function testKey(providerId, apiKey) {
+  const prov = PROVIDERS[providerId];
+  if (!prov) return { ok: false, message: 'Fournisseur inconnu : ' + providerId };
+  if (!apiKey) return { ok: false, message: 'Aucune clé à tester pour ce fournisseur.' };
+  try {
+    const { url, opts, parseResponse } = prov.buildRequest(
+      apiKey, 'Tu réponds en un seul mot.', 'Réponds exactement: OK');
+    // Le test doit rester quasi gratuit : on abaisse la limite de sortie.
+    const optsTest = { ...opts, body: JSON.stringify({ ...JSON.parse(opts.body), max_tokens: 16 }) };
+    const resp = await fetch(url, optsTest);
+    if (!resp.ok) {
+      const eb = await resp.json().catch(() => ({}));
+      const msg = (eb && eb.error && eb.error.message) || (eb && eb.message) || '';
+      return { ok: false, message: 'HTTP ' + resp.status + (msg ? ' — ' + msg : '') };
+    }
+    const texte = String(parseResponse(await resp.json()) || '').trim();
+    return texte
+      ? { ok: true,  message: 'Clé valide — le modèle répond (' + prov.name + ').' }
+      : { ok: false, message: 'Le modèle a renvoyé une réponse vide.' };
+  } catch (e) {
+    return { ok: false, message: String((e && e.message) || e) };
+  }
+}
+
+window.SS_API = { PROVIDERS, analyzeStock, fetchRegionData, testKey };

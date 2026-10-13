@@ -2,7 +2,10 @@
 
 // ── ÉTAT ─────────────────────────────────────────────────────────────
 let STATE = {
-  provider:     localStorage.getItem('ss_provider') || 'claude',
+  // Défaut : DeepSeek. Anthropic est le défaut historique, mais son API refuse
+  // les appels depuis un navigateur (aucun en-tête CORS au préflight) — le
+  // défaut envoyait donc l'utilisateur droit dans un mur.
+  provider:     localStorage.getItem('ss_provider') || 'deepseek',
   apiKeys: {
     claude:     localStorage.getItem('ss_key_claude')     || '',
     mistral:    localStorage.getItem('ss_key_mistral')    || '',
@@ -52,6 +55,32 @@ function toggleTheme() {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────
 const PAGES = ['analyze','markets','guide','history','settings'];
+
+/* Marchés couverts — une seule liste, qui alimente à la fois le <select> de
+ * l'onglet Analyser et la correspondance « région de la page Marchés » → valeur.
+ * Avant, le HTML ne proposait que BRVM / TSX / AUTO alors que l'app couvre six
+ * marchés (voir REGIONS dans markets.js) : impossible de lancer une analyse
+ * ciblée sur les États-Unis, l'Europe, l'Asie ou les émergents, et les actions
+ * de ces pages renvoyaient toutes sur « AUTO ». */
+const MARCHES = [
+  { value:'BRVM',      label:'🌍 BRVM',        region:'brvm' },
+  { value:'TSX',       label:'🍁 TSX',         region:'tsx' },
+  { value:'USA',       label:'🇺🇸 États-Unis', region:'usa' },
+  { value:'Europe',    label:'🇪🇺 Europe',      region:'europe' },
+  { value:'Asie',      label:'🌏 Asie',         region:'asie' },
+  { value:'Émergents', label:'🌐 Émergents',    region:'emergents' },
+  { value:'AUTO',      label:'🔍 Auto',         region:null }
+];
+const MARKET_OF_REGION = MARCHES.filter(m => m.region).reduce((o, m) => (o[m.region] = m.value, o), {});
+
+function initMarketSelect() {
+  const sel = document.getElementById('marketSelect');
+  if (!sel) return;
+  const courant = sel.value;
+  sel.innerHTML = MARCHES
+    .map(m => `<option value="${SS_UI.esc(m.value)}">${SS_UI.esc(m.label)}</option>`).join('');
+  if (courant) sel.value = courant;
+}
 
 function showPage(name) {
   PAGES.forEach(p => {
@@ -142,6 +171,29 @@ function clearApiKey() {
   if (inp) { inp.value = ''; inp.placeholder = '…'; }
   refreshSettingsUI();
   SS_UI.showToast('Clé ' + pid + ' supprimée');
+}
+
+/* Valide la clé du fournisseur actif par une vraie mini-génération, et affiche
+ * le résultat sous les boutons. Évite l'échec silencieux : sans ce test, on ne
+ * découvre une clé invalide qu'au milieu d'une analyse. */
+async function testerCle() {
+  const pid  = STATE.provider;
+  const cle  = STATE.apiKeys[pid] || '';
+  const sortie = document.getElementById('api-key-test');
+  const provName = (SS_API.PROVIDERS[pid] || {}).name || pid;
+
+  if (!cle) {
+    if (sortie) { sortie.textContent = '⚠️ Aucune clé enregistrée pour ' + provName + '.'; sortie.style.color = 'var(--am)'; }
+    return;
+  }
+  if (sortie) { sortie.textContent = '⏳ Test de la clé ' + provName + '…'; sortie.style.color = 'var(--mu)'; }
+
+  const res = await SS_API.testKey(pid, cle);
+  if (sortie) {
+    sortie.textContent = (res.ok ? '✓ ' : '✗ ') + res.message;
+    sortie.style.color = res.ok ? 'var(--gr)' : 'var(--re)';
+  }
+  SS_UI.showToast(res.ok ? '✓ ' + res.message : '✗ ' + res.message);
 }
 
 function getActiveKey() { return STATE.apiKeys[STATE.provider] || ''; }
@@ -397,7 +449,10 @@ function renderMarkets(data, region) {
   const stocks = Array.isArray(data.stocks) ? data.stocks : [];
   const { REGIONS } = window.SS_DATA;
   const st = SS_HOURS.getMarketStatus(region);
-  const mktKey = { brvm:'BRVM', tsx:'TSX' }[region] || 'AUTO';
+  // Un seul endroit qui fait correspondre une région de la page Marchés à la
+  // valeur du sélecteur de l'onglet Analyser. Avant, seuls brvm et tsx étaient
+  // mappés : les quatre autres régions retombaient toutes sur 'AUTO'.
+  const mktKey = MARKET_OF_REGION[region] || 'AUTO';
 
   const bc = stocks.filter(s=>s.signal==='b').length;
   const hc = stocks.filter(s=>s.signal==='h').length;
@@ -518,9 +573,33 @@ function loadFromHistory(i) {
   renderResults(h.data);
 }
 
+/* Recharge l'historique depuis IndexedDB. Les analyses étaient bien écrites en
+ * base (`saveAnalysis`) mais jamais relues : après un rechargement de page,
+ * l'onglet Historique apparaissait vide alors que les données existaient. */
+async function chargerHistorique() {
+  try {
+    const lignes = await SS_DB.getAnalyses(20);
+    if (!Array.isArray(lignes) || !lignes.length) return;
+    STATE.history = lignes.map(r => ({
+      ticker: (r.data && r.data.ticker) || r.ticker,
+      market: (r.data && r.data.market) || r.market,
+      intent: r.intent,
+      data:   r.data,
+      ts:     new Date(r.createdAt || Date.now())
+                .toLocaleTimeString('fr-CA', { hour:'2-digit', minute:'2-digit' })
+    }));
+    buildHistory();
+  } catch (e) {
+    // Base indisponible (navigation privée, quota atteint) : l'onglet reste
+    // vide, mais l'application n'est pas cassée pour autant.
+  }
+}
+
 async function clearHistory() {
   if (!confirm('Supprimer les analyses de plus de 30 jours ?')) return;
   await SS_DB.clearOldAnalyses(30);
+  await chargerHistorique();
+  buildHistory();
   SS_UI.showToast('✓ Historique nettoyé');
 }
 
@@ -532,11 +611,14 @@ function updateOnlineBadge() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────
-function init() {
+async function init() {
   // Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
   }
+
+  // Sélecteur de marché : alimenté par la liste MARCHES (six marchés + Auto)
+  initMarketSelect();
 
   // Thème — instant pour éviter le flash
   applyTheme(STATE.theme, true);
@@ -558,13 +640,22 @@ function init() {
   const tk = document.getElementById('tickerInput');
   if (tk) tk.addEventListener('keydown', e => { if (e.key === 'Enter') { e.target.blur(); runAnalysis(); } });
 
-  // Ticker indices
-  const MKT = { bmv:['+37.4%','+37.8%','+37.1%','+37.6%'], tmv:['+12.1%','+12.3%','+11.9%','+12.2%'] };
-  let mi = 0;
-  setInterval(() => {
-    mi = (mi+1) % 4;
-    Object.entries(MKT).forEach(([id,vals]) => { const el=document.getElementById(id); if(el) el.textContent=vals[mi]; });
-  }, 3500);
+  // Bandeau d'en-tête : statut réel des deux marchés de référence.
+  // Remplace des pourcentages inventés (+37.4 % / +12.1 %) qui étaient animés
+  // en boucle et présentés comme des indices de marché. Une app de finance ne
+  // doit pas afficher un chiffre fabriqué à la place d'une donnée de marché.
+  const majStatutMarches = () => {
+    [['brvm','bmv'], ['tsx','tmv']].forEach(([region, id]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const st = SS_HOURS.getMarketStatus(region);
+      const ouvert = !!(st && st.isOpen);
+      el.textContent = ouvert ? 'Ouvert' : 'Fermé';
+      el.style.color = ouvert ? 'var(--gr)' : 'var(--re)';
+    });
+  };
+  majStatutMarches();
+  setInterval(majStatutMarches, 60000);
 
   // Redimensionnement
   window.addEventListener('resize', () => {
@@ -573,12 +664,13 @@ function init() {
     }
   });
 
-  console.log('[StockSense v2] Initialisé ✓ | Thème:', STATE.theme, '| Provider:', STATE.provider);
+  // Historique persistant (IndexedDB)
+  await chargerHistorique();
 }
 
 window.SS_APP = {
   showPage, toggleTheme, setIntent, quickPick, runAnalysis, resetAnalysis,
-  swTab, switchChart, selectProvider, saveApiKey, clearApiKey,
+  swTab, switchChart, selectProvider, saveApiKey, clearApiKey, testerCle,
   selectRegion, refreshMarket, loadRegion, showMarketInfo,
   analyzeFromMarket, toggleGuide, loadFromHistory, clearHistory, init
 };

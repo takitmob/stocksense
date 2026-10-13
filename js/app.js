@@ -321,7 +321,8 @@ async function runAnalysis() {
   // couvert (la BRVM), on continue en mode indicatif — et l'app le dit.
   const regionQ = (MARCHES.find((m) => m.value === market) || {}).region || null;
   let faits = null;
-  if (window.SS_QUOTES && window.SS_QUOTES.quotesCleEnregistree()) {
+  // La BRVM ne demande aucune clé : son instantané est publié dans le dépôt.
+  if (window.SS_QUOTES && (window.SS_QUOTES.quotesCleEnregistree() || regionQ === 'brvm')) {
     if (provLbl) provLbl.textContent = 'Récupération des cotations réelles…';
     try { faits = await window.SS_QUOTES.quotesCharger(ticker, regionQ); } catch (e) { faits = null; }
     if (provLbl) provLbl.textContent = 'Analyse via ' + (SS_API.PROVIDERS[pid]?.name || pid) + '…';

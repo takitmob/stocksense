@@ -133,6 +133,74 @@ function quotesAssembler(quote, serie) {
   };
 }
 
+/* ── BRVM : instantané servi depuis la même origine ─────────────────────
+ *
+ * brvm.org publie ses cours en HTML, sans API, et aucune source gratuite ne
+ * couvre cette place. Un runner GitHub Actions — donc côté serveur, hors
+ * contrainte CORS — extrait les cours chaque séance et les dépose dans le
+ * dépôt ; l'app lit ces fichiers depuis SA PROPRE ORIGINE. Aucun relais à
+ * administrer, aucun certificat, aucun quota, et la donnée est officielle.
+ *
+ * Le marché cote une fois par jour : un instantané quotidien est la bonne
+ * granularité, pas un flux temps réel.
+ */
+const BRVM_FICHIERS = { cours: 'data/brvm.json', historique: 'data/brvm-history.json' };
+
+async function quotesChargerBRVM(ticker, options) {
+  options = options || {};
+  const t = String(ticker || '').trim().toUpperCase();
+  if (!t) return { ok: false, erreur: 'Ticker vide.' };
+  let snap, hist = null;
+  try {
+    const rc = await fetch(BRVM_FICHIERS.cours, { cache: options.force ? 'no-store' : 'default' });
+    if (!rc.ok) {
+      return { ok: false, indisponible: true,
+               erreur: 'Instantané BRVM non publié (HTTP ' + rc.status + ').' };
+    }
+    snap = await rc.json();
+  } catch (e) {
+    return { ok: false, erreur: 'Instantané BRVM injoignable : ' + String((e && e.message) || e) };
+  }
+  try {
+    const rh = await fetch(BRVM_FICHIERS.historique, { cache: 'default' });
+    if (rh.ok) hist = await rh.json();
+  } catch (e) { /* l'historique est optionnel : sans lui, pas de RSI ni de graphique */ }
+
+  const v = (snap.valeurs || []).find(x => x.ticker === t);
+  if (!v) {
+    return { ok: false, indisponible: true,
+             erreur: 'Ce titre ne figure pas dans la cote BRVM du ' + (snap.recupere || '?').slice(0, 10) + '.' };
+  }
+  const points = (hist && hist.series && hist.series[t]) || [];
+  const series = points.map(p => p[1]).filter(n => typeof n === 'number');
+  const volumes = points.map(p => p[2]).filter(n => typeof n === 'number');
+  const rsi = calculerRSI(series, 14);
+  const date = String(snap.recupere || '').slice(0, 10);
+  const age = date ? Math.floor((Date.now() - Date.parse(date + 'T00:00:00Z')) / 86400000) : null;
+  return {
+    ok: true,
+    source: 'BRVM (brvm.org)',
+    date: date,
+    devise: snap.devise || 'FCFA',
+    nom: v.nom || null,
+    place: 'BRVM',
+    prix: v.cloture,
+    variation: v.variation,
+    clotures: series.slice(-20),
+    volumes: volumes.slice(-20),
+    rsi: rsi,
+    rsiActuel: rsi.length ? rsi[rsi.length - 1] : null,
+    moyenne20: moyenne(series.slice(-20)),
+    moyenne50: moyenne(series),
+    volumeMoyen: moyenne(volumes.slice(-20)),
+    seances: series.length,
+    debut: points[0] ? points[0][0] : null,
+    fin: points.length ? points[points.length - 1][0] : date,
+    perime: age !== null && age > 4,
+    officiel: true,
+  };
+}
+
 /**
  * Charge les données réelles d'un titre. Ne jette jamais : renvoie
  * { ok:false, erreur } — l'appelant décide quoi en faire.
@@ -140,6 +208,8 @@ function quotesAssembler(quote, serie) {
  */
 async function quotesCharger(ticker, region, options) {
   options = options || {};
+  // La BRVM passe par l'instantané du dépôt : elle ne demande aucune clé.
+  if (region === 'brvm') return quotesChargerBRVM(ticker, options);
   const cle = options.cle || quotesCle();
   if (!quotesCleEnregistree() && !options.cle) {
     return { ok: false, indisponible: true, erreur: 'Aucune clé de données de marché configurée.' };
@@ -190,11 +260,15 @@ function quotesBlocPrompt(f) {
     '- prix de reference : ' + nb(f.prix) + (f.devise ? ' ' + f.devise : ''),
     f.variation != null ? '- variation du jour : ' + nb(f.variation) + ' %' : '',
     f.rsiActuel != null ? '- RSI(14) CALCULE : ' + nb(f.rsiActuel) : '',
-    f.moyenne20 != null ? '- moyenne mobile 20 seances : ' + nb(f.moyenne20) : '',
-    f.moyenne50 != null ? '- moyenne mobile 50 seances : ' + nb(f.moyenne50) : '',
-    f.volumeMoyen != null ? '- volume moyen (20 seances) : ' + nb(f.volumeMoyen) : '',
-    '- 20 dernieres clotures : [' + f.clotures.map(v => Math.round(v * 100) / 100).join(', ') + ']',
-    f.volumes && f.volumes.length ? '- 20 derniers volumes : [' + f.volumes.map(v => Math.round(v)).join(', ') + ']' : '',
+    '- clotures disponibles (' + f.clotures.length + ') : [' + f.clotures.map(v => Math.round(v * 100) / 100).join(', ') + ']',
+    f.volumes && f.volumes.length ? '- volumes disponibles (' + f.volumes.length + ') : [' + f.volumes.map(v => Math.round(v)).join(', ') + ']' : '',
+    f.moyenne20 != null ? '- moyenne des ' + Math.min(f.clotures.length, 20) + ' dernieres clotures : ' + nb(f.moyenne20) : '',
+    (f.moyenne50 != null && f.clotures.length > 20) ? '- moyenne des ' + f.clotures.length + ' clotures de la serie : ' + nb(f.moyenne50) : '',
+    (f.seances != null && f.seances < 15)
+      ? '- SERIE COURTE : ' + f.seances + ' seance(s) enregistree(s) seulement. Le RSI n est PAS encore calculable : ne l invente pas, dis que l historique est trop court.'
+      : '',
+    f.perime ? '- ATTENTION : cet instantane date du ' + f.date + ', soit plus de quatre jours. Signale-le dans le resume.' : '',
+    f.officiel ? '- Source officielle de la place : cours de cloture publies par la BRVM elle-meme.' : '',
     'CONSIGNE : ces chiffres sont MESURES, pas estimes. Recopie-les exactement dans le JSON. '
       + 'Ne les recalcule pas et n\'invente aucun autre prix. Deduis technique et momentum de ces series.',
   ];

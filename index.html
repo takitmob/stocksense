@@ -299,8 +299,11 @@
     </div>
     <div class="api-key-status" id="quotes-key-status">Aucune clé</div>
     <div class="api-key-status" id="quotes-test" style="color:var(--mu)"></div>
-    <div style="font-size:11px;color:var(--am);margin-top:8px">
-      ⚠️ Aucune source gratuite ne couvre la BRVM : sur ce marché, les analyses restent indicatives.
+    <div style="font-size:11px;color:var(--mu);margin-top:10px;line-height:1.55">
+      <b style="color:var(--gr)">La BRVM ne demande aucune clé.</b> Ses cours de clôture sont extraits
+      de brvm.org chaque séance par un runner GitHub Actions, puis publiés dans le dépôt :
+      l'app les lit depuis sa propre origine. L'historique se construit séance après séance —
+      le RSI BRVM devient calculable au bout d'une quinzaine de séances.
     </div>
   </div>
 

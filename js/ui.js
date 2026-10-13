@@ -97,7 +97,8 @@ function renderVerdict(data) {
   </div>` : `
   <div class="verdict-summary" style="margin-top:9px;font-size:11px;opacity:.85">
     ⚠️ Analyse indicative : aucun prix réel n'a pu être injecté (clé de données de marché absente,
-    ou marché non couvert comme la BRVM). Les chiffres sont ceux du modèle, pas des cotations.
+    titre absent de la cote du jour, ou instantané indisponible). Les chiffres sont ceux du modèle,
+    pas des cotations.
   </div>`}
 </div>`;
 }
@@ -148,6 +149,18 @@ function drawChart(data, mode) {
   else                        { raw = data.volume_history; col = '#FFB340'; }
 
   if (!raw || !raw.length) return;
+  // Une série d'un seul point ne fait pas un graphique. On l'écrit au lieu de
+  // dessiner une droite inventée : sur un marché comme la BRVM, l'historique se
+  // construit séance après séance, et la première séance n'a pas de courbe.
+  if (raw.length < 2) {
+    ctx.fillStyle = '#3A4158'; ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Historique insuffisant — ' + raw.length + ' séance enregistrée', W / 2, H / 2 - 8);
+    ctx.fillStyle = '#252B3D'; ctx.font = '9.5px sans-serif';
+    ctx.fillText(mode === 'volume' ? 'la courbe se construira séance après séance'
+                                   : 'le RSI devient calculable à partir de 15 séances', W / 2, H / 2 + 10);
+    return;
+  }
   const n  = raw.length;
   const mn = Math.min(...raw) * 0.96;
   const mx = Math.max(...raw) * 1.04;

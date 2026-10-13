@@ -313,9 +313,13 @@ async function analyzeStock(providerId, apiKey, ticker, market, intent, faits) {
     // le champ lu par l'interface s'appelle `price` (js/ui.js) — ne pas confondre
     result.price = (faits.prix != null ? String(faits.prix) : result.price)
       + (faits.devise ? ' ' + faits.devise : '');
-    if (faits.clotures && faits.clotures.length >= 2) result.price_history = faits.clotures;
-    if (faits.rsi && faits.rsi.length >= 2) result.rsi_history = faits.rsi.slice(-20);
-    if (faits.volumes && faits.volumes.length >= 2) result.volume_history = faits.volumes;
+    // Les séries réelles remplacent TOUJOURS celles du modèle, quelle que soit
+    // leur longueur — y compris une seule séance. Laisser les points inventés
+    // en place dès qu'on détient la vraie donnée serait le mensonge exact qu'on
+    // cherche à supprimer ; l'interface affiche « historique insuffisant ».
+    result.price_history = faits.clotures ? faits.clotures.slice() : [];
+    result.rsi_history = faits.rsi ? faits.rsi.slice(-20) : [];
+    result.volume_history = faits.volumes ? faits.volumes.slice() : [];
   }
 
   // Cohérence : le verdict est recalcule a partir des scores. S'il contredit

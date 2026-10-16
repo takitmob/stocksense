@@ -77,9 +77,12 @@ let sansStop = T.trCalculer(Object.assign({}, base, { stop: '' }));
 ok('sans stop, pas de taille', !sansStop.ok, sansStop.motifs);
 
 console.log('\n— Garde-fous');
-const regl = T.TR_REGLES_DEFAUT;
+// Les garde-fous sont éprouvés avec un courtier à commission fixe et parts entières :
+// c'est le cas le plus tendu pour le budget de risque, et il garde des chiffres lisibles.
+const regl = Object.assign({}, T.TR_REGLES_DEFAUT, { comm: 4.95, fraisPct: 0, fractionnaire: false });
 const prop = { ticker: 'SHOP', sens: 'achat', entree: 142.30, stop: 137.50, cible: 155, capital: 5000 };
-prop.calcul = T.trCalculer(Object.assign({ plafondLignePct: regl.plafondLignePct, comm: regl.comm, risquePct: regl.risquePct }, prop));
+prop.calcul = T.trCalculer(Object.assign({ plafondLignePct: regl.plafondLignePct, comm: regl.comm,
+  fraisPct: 0, fractionnaire: false, risquePct: regl.risquePct }, prop));
 ok('proposition nominale acceptée', T.trValider(prop, regl, { halte: false, positionsOuvertes: 0, perteJour: 0, capital: 5000 }).ok);
 ok('halte -> refus', !T.trValider(prop, regl, { halte: true, positionsOuvertes: 0, perteJour: 0, capital: 5000 }).ok);
 ok('plafond de positions -> refus',
@@ -90,7 +93,8 @@ ok('le capital du formulaire fait foi, pas celui de l\'écran (régression)',
    T.trValider(prop, regl, { halte: false, positionsOuvertes: 0, perteJour: 0, capital: 500 }).motifs);
 // aucun contournement silencieux : demander 3 % quand la règle dit 1 % est refusé, et nommé
 const prop3 = { ticker: 'AC.TO', sens: 'achat', entree: 12.40, stop: 11.90, cible: 14.00, capital: 2000, risquePct: 3 };
-prop3.calcul = T.trCalculer(Object.assign({ comm: regl.comm, plafondLignePct: regl.plafondLignePct }, prop3));
+prop3.calcul = T.trCalculer(Object.assign({ comm: regl.comm, fraisPct: 0, fractionnaire: false,
+  plafondLignePct: regl.plafondLignePct }, prop3));
 ok('risque demandé (3 %) > règle inscrite (1 %) -> refus', !T.trValider(prop3, regl, { halte: false, positionsOuvertes: 0, perteJour: 0, capital: 2000 }).ok);
 ok('et le motif nomme la règle',
    T.trValider(prop3, regl, { halte: false, positionsOuvertes: 0, perteJour: 0, capital: 2000 }).motifs.join(' ').indexOf('règle inscrite') > 0);
@@ -99,10 +103,35 @@ ok('la même chose avec la règle à 3 % passe',
 ok('perte du jour proche du plafond -> refus',
    !T.trValider(prop, regl, { halte: false, positionsOuvertes: 0, perteJour: -145, capital: 5000 }).ok);
 
+console.log('\n— Wealthsimple : parts fractionnaires et frais de conversion');
+const ws = { capital: 100, risquePct: 1, entree: 279.01, stop: 265.05, cible: 306.93,
+             comm: 0, fraisPct: 0, fractionnaire: true, plafondLignePct: 25, sens: 'achat' };
+let w = T.trCalculer(ws);
+ok('100 $ / 1 % : la position existe (0 $ de commission)', w.ok, w.motifs);
+ok('quantité fractionnaire sous l\'unité', w.qte > 0 && w.qte < 1, w.qte);
+ok('4 décimales, pas plus', Math.abs(w.qte * 10000 - Math.round(w.qte * 10000)) < 1e-9, w.qte);
+ok('le risque réel tient dans le budget de 1 $', w.risqueReel <= 1.0001, w.risqueReel);
+ok('aucun frais sur un titre canadien', w.fraisAR === 0, w.fraisAR);
+egal('le plafond de ligne (25 % = 25 $) n\'est pas atteint', w.montant <= 25, true);
+// un titre américain : 1,5 % de conversion par opération, donc 3 % l'aller-retour
+let us = T.trCalculer(Object.assign({}, ws, { fraisPct: 1.5 }));
+ok('titre américain : la quantité baisse', us.ok && us.qte < w.qte, { ca: w.qte, us: us.qte });
+ok('les frais proportionnels sont comptés', us.fraisAR > 0, us.fraisAR);
+ok('le seuil de couverture vaut exactement 3 % (1,5 % × 2)',
+   Math.abs(us.seuilCouverturePct - 3) < 1e-9, us.seuilCouverturePct);
+ok('et le risque réel tient toujours dans le budget', us.risqueReel <= 1.0001, us.risqueReel);
+// parts entières : la même position ne passe plus
+let entier = T.trCalculer(Object.assign({}, ws, { fractionnaire: false }));
+egal('parts entières seulement -> plus aucune position à 100 $', entier.ok, false);
+
 console.log('\n— Ticket d\'ordre');
 prop.ts = new Date(2026, 9, 15, 14, 32).getTime();
 prop.mode = 'papier';
 const ticket = T.trOrdreTexte(prop);
+const ticketWs = T.trOrdreTexte(Object.assign({}, ws, { ticker: 'RY.TO', ts: prop.ts, mode: 'papier', calcul: w }));
+ok('ticket fractionnaire : le montant d\'abord, comme le formulaire du courtier',
+   ticketWs.indexOf('ACHAT 19,98 \$ de RY.TO') === 0, ticketWs.split('\n')[0]);
+ok('et la part en clair, entre parenthèses', ticketWs.indexOf('(0,0716 part)') > 0, ticketWs.split('\n')[0]);
 ok('mentionne le sens et la quantité', ticket.indexOf('ACHAT 8 × SHOP') === 0, ticket.split('\n')[0]);
 ok('porte le stop de protection', ticket.indexOf('137,50 $') > 0, ticket);
 ok('annonce le seuil de couverture', ticket.indexOf('juste pour les couvrir') > 0);

@@ -22,7 +22,9 @@ const TR_REGLES_DEFAUT = {
   plafondLignePct: 25,     // % du capital maximum sur une seule ligne
   maxPositions: 5,         // positions ouvertes simultanées
   perteJourPct: 3.0,       // perte réalisée dans la journée -> halte
-  comm: 4.95,              // commission par transaction (Questrade : 4,95-9,95 $)
+  comm: 0,                 // Wealthsimple : aucune commission sur les actions
+  fraisPct: 0,             // frais proportionnels par côté — 1,5 pour un titre américain
+  fractionnaire: true,     // Wealthsimple accepte les parts fractionnaires dès 1 $
   devise: '$',
 };
 
@@ -61,8 +63,16 @@ function trDev(n, dec) {
 /* Le risque est borné par trois choses, dans cet ordre :
  *   1. le % de capital risqué (taille « théorique »),
  *   2. le plafond par ligne (aucune ligne ne domine le compte),
- *   3. l'argent réellement disponible, commission comprise.
- * Les commissions entrent dans le risque : un stop se paie aussi. */
+ *   3. l'argent réellement disponible, frais compris.
+ * Les frais entrent dans le risque : un stop se paie aussi. Ils sont de deux
+ * natures, et elles ne se traitent pas de la même façon :
+ *   - `comm`, fixe par transaction (0 $ chez Wealthsimple, 4,95-9,95 $ chez
+ *     Questrade) : il se retranche du budget AVANT de diviser ;
+ *   - `fraisPct`, proportionnel au montant (1,5 % de conversion, par opération,
+ *     sur un titre américain chez Wealthsimple) : il s'ajoute au risque
+ *     unitaire, sinon l'équation n'a pas de solution.
+ * Le budget résout donc :  q × (risqU + 2 × fraisPct% × entrée) ≤ capital × risque% − 2 × comm
+ */
 function trCalculer(p) {
   const capital   = trNum(p.capital);
   const entree    = trNum(p.entree);
@@ -71,11 +81,13 @@ function trCalculer(p) {
   const risquePct = trNum(p.risquePct);
   const comm      = trNum(p.comm);
   const plafond   = trNum(p.plafondLignePct);
+  const fraisPct  = isFinite(trNum(p.fraisPct)) ? trNum(p.fraisPct) : 0;
 
   const out = {
-    ok: false, motifs: [], qte: 0, montant: 0, coutTotal: 0,
+    ok: false, motifs: [], qte: 0, montant: 0, coutTotal: 0, fractionnaire: false,
     risqueUnitaire: NaN, risqueMontant: NaN, risqueReel: NaN, pertePct: NaN,
-    gainCible: NaN, rr: NaN, fraisAR: NaN, seuilCouverturePct: NaN, invalidation: NaN,
+    gainCible: NaN, rr: NaN, fraisAR: NaN, fraisCote: NaN, seuilCouverturePct: NaN,
+    invalidation: NaN,
   };
   if (!isFinite(capital) || capital <= 0) { out.motifs.push('Capital absent ou nul.'); return out; }
   if (!isFinite(entree) || entree <= 0)   { out.motifs.push('Prix d\'entrée absent.'); return out; }
@@ -94,39 +106,47 @@ function trCalculer(p) {
     return out;
   }
 
+  const fractionnaire = !!p.fractionnaire;
   const risqueMontant = capital * risquePct / 100;
-  const fraisAR = 2 * comm;                       // une entrée, une sortie : la sortie du stop aussi
-  out.fraisAR = fraisAR;
   out.risqueMontant = risqueMontant;
+  out.fractionnaire = fractionnaire;
 
-  /* Le budget de risque PAIE les commissions : la taille se calcule donc sur ce
-   * qui reste après le péage, sinon la position dépasse le plafond par
-   * construction. C'est ici que le mur des frais devient visible : sur un petit
-   * compte, les deux commissions peuvent dépasser tout le budget. */
-  const budget = risqueMontant - fraisAR;
+  /* Le budget de risque PAIE les frais : la taille se calcule donc sur ce qui
+   * reste après le péage, sinon la position dépasse le plafond par construction.
+   * C'est ici que le mur des frais devient visible : sur un petit compte, les
+   * deux commissions fixes peuvent dépasser tout le budget. */
+  const budget = risqueMontant - 2 * comm;
   if (budget <= 0) {
+    out.fraisAR = 2 * comm;
     out.motifs.push('Le budget de risque (' + trFmt(risqueMontant, 2) + ' = ' + trFmt(risquePct, 2)
       + ' % de ' + trFmt(capital, 0) + ') ne couvre même pas les deux commissions ('
-      + trFmt(fraisAR, 2) + ').');
+      + trFmt(2 * comm, 2) + ').');
     return out;
   }
-  const qBudget = Math.floor(budget / risqU);
-  const qPlafond = Math.floor((capital * plafond / 100) / entree);
-  let q = Math.min(qBudget, qPlafond);
-  while (q > 0 && (q * entree + comm) > capital) q--;   // l'argent disponible tranche en dernier
+  const coutVariable = 2 * (fraisPct / 100) * entree;   // frais proportionnels, par unité, aller-retour
+  const qBudget  = budget / (risqU + coutVariable);
+  const qPlafond = (capital * plafond / 100) / entree;
+  const qCash    = (capital - comm) / entree;           // ce que l'argent disponible permet vraiment
+  let qExact = Math.min(qBudget, qPlafond, qCash);
+  // parts entières par défaut ; fractionnaires (4 décimales) chez Wealthsimple
+  const q = fractionnaire ? Math.floor(qExact * 10000) / 10000 : Math.floor(qExact);
 
-  if (q <= 0) {
-    out.motifs.push('Aucune quantité possible : le capital ne couvre pas une unité de risque après commissions.');
+  if (!(q > 0)) {
+    out.motifs.push('Aucune quantité possible : le capital ne couvre pas une unité de risque après frais.');
     return out;
   }
   const montant    = q * entree;
+  const fraisCote  = comm + montant * fraisPct / 100;   // commission fixe + frais proportionnels
+  const fraisAR    = 2 * fraisCote;
   const risqueReel = q * risqU + fraisAR;               // le stop est un ordre : il se paie
   const gainCible  = isFinite(cible) && (sens === 'achat' ? cible > entree : cible < entree)
                      ? q * Math.abs(cible - entree) - fraisAR : NaN;
 
   out.qte = q;
   out.montant = montant;
-  out.coutTotal = montant + comm;
+  out.coutTotal = montant + fraisCote;
+  out.fraisCote = fraisCote;
+  out.fraisProportionnels = montant * fraisPct / 100;
   out.fraisAR = fraisAR;
   out.risqueReel = risqueReel;
   out.pertePct = 100 * risqueReel / capital;
@@ -184,16 +204,24 @@ function trOrdreTexte(prop) {
   const pad = (n) => (n < 10 ? '0' + n : '' + n);
   const horo = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
              + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  const tk = String(prop.ticker || '').toUpperCase();
+  const sens = (prop.sens === 'vente') ? 'VENTE' : 'ACHAT';
+  // Wealthsimple prend un MONTANT en dollars pour un ordre fractionnaire : on écrit
+  // donc la ligne comme son formulaire la demande, et la part en clair à côté.
+  const tete = c.fractionnaire
+    ? sens + ' ' + trDev(c.montant) + ' de ' + tk + '  (' + trFmt(c.qte, 4) + ' part)'
+    : sens + ' ' + (c.qte || 0) + ' × ' + tk;
   const lignes = [
-    (prop.sens === 'vente' ? 'VENTE' : 'ACHAT') + ' ' + (c.qte || 0) + ' × ' + String(prop.ticker || '').toUpperCase(),
+    tete,
     'Limite : ' + trDev(trNum(prop.entree)) + ' · valide jour',
     'Stop de protection : ' + trDev(trNum(prop.stop)) + '  (invalidation : clôture au-delà)',
   ];
   if (isFinite(trNum(prop.cible))) lignes.push('Objectif : ' + trDev(trNum(prop.cible))
     + (isFinite(c.rr) ? '  (R:R ' + trFmt(c.rr, 2) + ')' : ''));
   lignes.push('Risque : ' + trDev(c.risqueReel) + ' = ' + trFmt(c.pertePct, 2) + ' % du capital');
-  lignes.push('Frais aller-retour : ' + trDev(c.fraisAR) + ' · il faut +' + trFmt(c.seuilCouverturePct, 2)
-    + ' % juste pour les couvrir');
+  lignes.push('Frais aller-retour : ' + trDev(c.fraisAR)
+    + (c.fraisProportionnels > 0 ? ' (dont ' + trDev(2 * c.fraisProportionnels) + ' de frais proportionnels)' : '')
+    + ' · il faut +' + trFmt(c.seuilCouverturePct, 2) + ' % juste pour les couvrir');
   lignes.push('— StockSense, proposition du ' + horo + (prop.mode === 'reel' ? '' : ' · MODE PAPIER'));
   return lignes.join('\n');
 }
@@ -321,6 +349,8 @@ if (typeof document !== 'undefined') {
       $('tr-r-pos').value = S.regles.maxPositions;
       $('tr-r-perte').value = S.regles.perteJourPct;
       $('tr-r-comm').value = S.regles.comm;
+      $('tr-r-fraispct').value = S.regles.fraisPct;
+      $('tr-r-frac').value = S.regles.fractionnaire ? 'oui' : 'non';
 
       // rappel du plafond de risque réellement inscrit dans les règles
       $('tr-risque-note').textContent = 'Plafond inscrit dans les règles : ' + trFmt(S.regles.risquePct, 2)
@@ -350,7 +380,7 @@ if (typeof document !== 'undefined') {
       const c = dernier.calcul, v = dernier.verdict;
       const lignes = [];
       lignes.push('<div class="tr-fig">');
-      lignes.push(fig('Quantité', c.qte + ' unité(s)'));
+      lignes.push(fig('Quantité', c.fractionnaire ? trFmt(c.qte, 4) + ' part(s)' : c.qte + ' unité(s)'));
       lignes.push(fig('Montant engagé', trDev(c.montant)));
       lignes.push(fig('Risque unitaire', trDev(c.risqueUnitaire)));
       lignes.push(fig('Risque réel (stop + frais)', trDev(c.risqueReel)));
@@ -402,7 +432,8 @@ if (typeof document !== 'undefined') {
     function carteProposition(p) {
       const c = p.calcul || {};
       const lignes = [];
-      lignes.push('<div class="l">' + (p.sens === 'vente' ? 'Vente' : 'Achat') + ' ' + c.qte + ' × '
+      const qteTxt = c.fractionnaire ? trFmt(c.qte, 4) + ' part' : c.qte + ' ×';
+      lignes.push('<div class="l">' + (p.sens === 'vente' ? 'Vente' : 'Achat') + ' ' + qteTxt + ' '
         + trDev(trNum(p.entree)) + ' · stop ' + trDev(trNum(p.stop))
         + (isFinite(trNum(p.cible)) ? ' · cible ' + trDev(trNum(p.cible)) : '') + '</div>');
       lignes.push('<div class="l">Risque ' + trDev(c.risqueReel) + ' (' + trFmt(c.pertePct, 2)
@@ -458,6 +489,8 @@ if (typeof document !== 'undefined') {
         capital: $('tr-capital').value || S.capital,
         risquePct: $('tr-risque').value || S.regles.risquePct,
         comm: S.regles.comm,
+        fraisPct: S.regles.fraisPct,
+        fractionnaire: !!S.regles.fractionnaire,
         plafondLignePct: S.regles.plafondLignePct,
       };
     }
@@ -550,6 +583,8 @@ if (typeof document !== 'undefined') {
           risquePct: trNum($('tr-r-risque').value), plafondLignePct: trNum($('tr-r-ligne').value),
           maxPositions: Math.max(1, Math.round(trNum($('tr-r-pos').value))),
           perteJourPct: trNum($('tr-r-perte').value), comm: trNum($('tr-r-comm').value),
+          fraisPct: trNum($('tr-r-fraispct').value),
+          fractionnaire: $('tr-r-frac').value === 'oui',
           devise: TR_REGLES_DEFAUT.devise,
         };
         Object.keys(r).forEach((k) => { if (!isFinite(r[k])) delete r[k]; });
@@ -570,6 +605,145 @@ if (typeof document !== 'undefined') {
       });
 
       rendre();
+      chargerScan();     // le balayage du jour, lu dans data/propositions.json
+    }
+
+    // ── BALAYAGE DU JOUR : lecture du fichier produit côté serveur ──────────
+    let scan = null;
+
+    function chargerScan() {
+      if (typeof fetch !== 'function') { rendreScanErreur('navigateur sans fetch'); return; }
+      fetch('data/propositions.json', { cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then((d) => { scan = d; rendreScan(); })
+        .catch((e) => rendreScanErreur(e.message));
+    }
+
+    function rendreScanErreur(msg) {
+      $('tr-scan').innerHTML = '<div class="tr-vide">Balayage indisponible (' + echapper(msg) + ').<br>'
+        + 'Ouvre la page depuis l’adresse publiée, ou lance <code>node tools/scan.js</code> '
+        + 'pour le produire localement.</div>';
+    }
+
+    function rendreScan() {
+      if (!scan) { $('tr-scan').innerHTML = ''; return; }
+      const r = scan.resume || {};
+      const conformes = (scan.propositions || []).filter((p) => p.etat === 'propose');
+      const surveille = (scan.propositions || []).filter((p) => p.etat === 'surveiller');
+      const refuses = (scan.propositions || []).filter((p) => p.etat === 'refuse');
+      const attente = (scan.propositions || []).filter((p) => p.etat === 'attendre');
+      const h = [];
+      h.push('<div class="tr-note">balayage du <b>' + echapper(scan.jour || '—') + '</b> · '
+        + (r.titres_suivis || 0) + ' titres suivis · capital ' + trDev((scan.compte || {}).capital, 0) + '</div>');
+
+      h.push('<div class="tr-scan-titre">Conformes aux règles (' + conformes.length + ')</div>');
+      if (!conformes.length) {
+        h.push('<div class="tr-vide">Aucune proposition conforme aujourd’hui. La règle demande une '
+          + 'tendance de fond haussière <b>et</b> un repli du prix : quand rien ne passe, on ne force pas. '
+          + 'C’est le résultat le plus fréquent — et le plus utile.</div>');
+      } else {
+        conformes.forEach((p, k) => {
+          const c = p.calcul || {};
+          h.push('<div class="tr-carte"><div class="h"><span class="tk">' + echapper(p.symbole) + '</span>'
+            + '<span class="et">' + echapper(p.nom ? String(p.nom).split(' (')[0] : '') + '</span></div>'
+            + '<div class="l">Achat ' + trFmt(c.qte, 4) + ' part · ' + trDev(c.montant)
+            + ' · entrée ' + trDev(trNum(p.entree)) + ' · stop ' + trDev(trNum(p.stop))
+            + ' · cible ' + trDev(trNum(p.cible)) + '</div>'
+            + '<div class="l">risque ' + trDev(c.risqueReel) + ' (' + trFmt(c.pertePct, 2)
+            + ' %) · R:R ' + trFmt(c.rr, 2) + ' · frais ' + trDev(c.fraisAR) + '</div>'
+            + '<div class="a"><button data-scan="' + k + '">Mettre au carnet</button></div></div>');
+        });
+        h.push('<button class="tr-btn gris" id="tr-scan-tout" style="margin-top:3px">'
+          + 'Mettre les ' + conformes.length + ' au carnet</button>');
+      }
+
+      if (surveille.length) {
+        h.push('<div class="tr-scan-titre">Sous surveillance (' + surveille.length + ') — la tendance est '
+          + 'bonne, le prix est tendu</div>');
+        h.push('<div class="tr-scan-liste">');
+        surveille.forEach((p) => {
+          const i = p.indicateurs || {};
+          h.push('<div class="tr-scan-ligne"><b>' + echapper(p.symbole) + '</b>'
+            + '<span>' + trDev(i.cours) + ' · RSI ' + trFmt(i.rsi14, 0) + '</span>'
+            + '<span>repli de ' + trFmt(p.ecart_repli_pct, 1) + ' % vers ' + trDev(p.prix_de_repli) + '</span>'
+            + (p.calcul_si_repli ? '<span class="di">donnerait ' + trFmt(p.calcul_si_repli.qte, 4)
+              + ' part · ' + trDev(p.calcul_si_repli.montant) + '</span>' : '')
+            + '</div>');
+        });
+        h.push('</div>');
+      }
+
+      if (attente.length) {
+        h.push('<div class="tr-scan-titre">Écartés par la tendance (' + attente.length + ')</div>');
+        h.push('<div class="tr-scan-liste">');
+        attente.forEach((p) => {
+          h.push('<div class="tr-scan-ligne"><b>' + echapper(p.symbole) + '</b><span>'
+            + echapper(p.raison) + '</span></div>');
+        });
+        h.push('</div>');
+      }
+      if (refuses.length) {
+        h.push('<div class="tr-scan-titre">Proposés mais refusés par les règles (' + refuses.length + ')</div>');
+        h.push('<div class="tr-scan-liste">');
+        refuses.forEach((p) => {
+          h.push('<div class="tr-scan-ligne"><b>' + echapper(p.symbole) + '</b><span>'
+            + echapper((p.motifs || []).join(' ')) + '</span></div>');
+        });
+        h.push('</div>');
+      }
+      if ((scan.donnees_indisponibles || []).length) {
+        h.push('<div class="tr-scan-titre">Données indisponibles ('
+          + scan.donnees_indisponibles.length + ')</div>');
+        h.push('<div class="tr-scan-liste">');
+        scan.donnees_indisponibles.forEach((e) => {
+          h.push('<div class="tr-scan-ligne"><b>' + echapper(e.symbole) + '</b><span>'
+            + echapper(e.raison) + '</span></div>');
+        });
+        h.push('</div>');
+      }
+      h.push('<div class="tr-note" style="margin-top:9px">' + echapper(scan.methode || '') + '<br>'
+        + '<b>' + echapper(scan.avertissement || '') + '</b></div>');
+      $('tr-scan').innerHTML = h.join('');
+      if (conformes.length) {
+        Array.prototype.forEach.call(document.querySelectorAll('#tr-scan [data-scan]'), (b) => {
+          b.onclick = function () {
+            const i = parseInt(b.dataset.scan, 10);
+            if (importerScan(conformes[i])) b.textContent = '✓ Au carnet';
+          };
+        });
+        const tout = $('tr-scan-tout');
+        if (tout) tout.onclick = function () {
+          let n = 0;
+          conformes.forEach((p) => { if (importerScan(p)) n++; });
+          tout.textContent = '✓ ' + n + ' ajoutée(s)';
+        };
+      }
+    }
+
+    /* Importer = recalculer avec les règles EN COURS de l'écran (elles ont pu changer
+     * depuis le balayage), puis passer les mêmes garde-fous que la saisie manuelle. */
+    function importerScan(p) {
+      const calc = trCalculer({
+        capital: S.capital, entree: p.entree, stop: p.stop, cible: p.cible,
+        risquePct: S.regles.risquePct, comm: S.regles.comm, fraisPct: p.fraisPct,
+        fractionnaire: S.regles.fractionnaire, plafondLignePct: S.regles.plafondLignePct,
+      });
+      const prop = {
+        id: 's' + Date.now() + Math.random().toString(36).slice(2, 6),
+        ts: Date.now(), mode: S.mode, origine: 'balayage',
+        ticker: p.symbole, sens: p.sens || 'achat', entree: trNum(p.entree), stop: trNum(p.stop),
+        cible: trNum(p.cible), capital: S.capital, risquePct: S.regles.risquePct,
+        fraisPct: p.fraisPct, calcul: calc, motifs: [],
+      };
+      const v = trValider(prop, S.regles, etatGlobal());
+      prop.verdict = v; prop.etat = v.ok ? 'propose' : 'refuse'; prop.motifs = v.motifs;
+      if (v.ok && S.propositions.some((x) => x.ticker === prop.ticker && x.etat !== 'suppr')) {
+        prop.etat = 'refuse';
+        prop.motifs = ['Déjà dans le carnet pour ce titre.'];
+      }
+      S.propositions.push(prop);
+      sauver(); rendre();
+      return prop.etat === 'propose';
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

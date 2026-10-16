@@ -1,0 +1,74 @@
+name: Balayage du jour
+
+# Le balayage tourne CÔTÉ SERVEUR, pour la même raison que l'instantané BRVM :
+# une page statique ne peut interroger que les sources qui renvoient
+# Access-Control-Allow-Origin, alors qu'un runner peut lire n'importe quoi. Ici
+# il n'y a rien à administrer, aucun quota, aucune clé : le résultat est déposé
+# en clair dans le dépôt, et l'app le lit depuis sa propre origine.
+#
+# Aucun ordre n'est transmis, à aucun moment : ce workflow produit un fichier
+# JSON de propositions, et c'est tout.
+
+on:
+  schedule:
+    # avant l'ouverture de Toronto (9 h 30 HE), pour que les tickets du jour
+    # soient prêts : 12 h 00 UTC = 8 h 00 HE
+    - cron: '0 12 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: balayage
+  cancel-in-progress: false
+
+jobs:
+  balayage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Éprouver d'abord le calcul utilisé par le balayage
+        run: node tests/trade-tests.js
+
+      - name: Lire les clôtures et produire les propositions
+        run: node tools/scan.js
+
+      - name: Publier si le balayage a changé
+        run: |
+          if [ ! -s data/propositions.json ]; then
+            echo "balayage vide — rien à publier"; exit 1
+          fi
+          git config user.name  "balayage-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/propositions.json
+          if git diff --staged --quiet; then
+            echo "aucun changement de propositions depuis le dernier balayage"
+          else
+            git commit -m "balayage : propositions du $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Résumé
+        if: always()
+        run: |
+          node - <<'JS'
+          const f = require('./data/propositions.json');
+          console.log('jour        : ' + f.jour);
+          console.log('compte      : ' + f.compte.capital + ' $ · risque '
+            + f.compte.regles.risquePct + ' % · frais fixes ' + f.compte.regles.comm + ' $');
+          console.log('conformes   : ' + f.resume.propositions_conformes);
+          console.log('surveillance: ' + f.resume.sous_surveillance);
+          console.log('en attente  : ' + f.resume.en_attente);
+          console.log('sans données: ' + f.resume.donnees_indisponibles);
+          f.propositions.filter(p => p.etat === 'propose' || p.etat === 'refuse').forEach(p => {
+            console.log('  ' + p.symbole + ' · ' + p.etat
+              + (p.calcul ? ' · ' + p.calcul.qte + ' part · ' + p.calcul.montant.toFixed(2) + ' $' : '')
+              + (p.motifs && p.motifs.length ? ' · ' + p.motifs.join(' ') : ''));
+          });
+          JS

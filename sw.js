@@ -14,7 +14,7 @@
  * À CHAQUE MODIFICATION des fichiers statiques : incrémenter CACHE_VERSION.
  */
 
-const CACHE_VERSION = 'stocksense-v5';
+const CACHE_VERSION = 'stocksense-v6';
 const SHELL = [
   './',
   './index.html',
@@ -27,6 +27,8 @@ const SHELL = [
   './js/db.js',
   './js/quotes.js',
   './js/trade.js',
+  './data/suivi.json',
+  './data/propositions.json',
   './js/ui.js',
   './manifest.json'
 ];

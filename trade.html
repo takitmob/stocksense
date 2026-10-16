@@ -66,6 +66,11 @@
   .tr-note{font-size:11px;color:var(--di);line-height:1.5}
   .tr-copier{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--tx);background:var(--s2);border:1px solid var(--bd);border-radius:var(--r-md);padding:10px;margin-top:9px;white-space:pre-wrap;word-break:break-word}
   .tr-pill{display:inline-block;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--bd);color:var(--mu)}
+  .tr-scan-titre{font-size:10px;font-weight:700;color:var(--mu);letter-spacing:1px;text-transform:uppercase;margin:11px 0 6px}
+  .tr-scan-liste{display:flex;flex-direction:column;gap:5px}
+  .tr-scan-ligne{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11.5px;color:var(--mu);padding:6px 9px;border-radius:var(--r-sm);background:var(--s2);font-variant-numeric:tabular-nums}
+  .tr-scan-ligne b{color:var(--tx);font-size:12px;min-width:64px}
+  .tr-scan-ligne .di{color:var(--di)}
   .tr-pill.reel{border-color:var(--re);color:var(--re);background:var(--re2)}
   .tr-pill.papier{border-color:var(--bl);color:var(--bl);background:rgba(59,111,224,.10)}
 </style>
@@ -100,6 +105,16 @@
   </div>
 
   <div class="tr-kpi" id="tr-kpi"></div>
+
+  <div class="section-panel">
+    <div class="section-title">Balayage du jour</div>
+    <div id="tr-scan"><div class="tr-vide">Chargement du balayage…</div></div>
+    <div class="tr-note" style="margin-top:9px">
+      Le balayage est produit <b>côté serveur</b> (lecture des clôtures réelles, calcul des
+      indicateurs, application de la règle) puis déposé en clair dans <code>data/propositions.json</code>.
+      Il ne transmet rien : il propose, tu décides. Rien n'est ajouté au carnet sans ton clic.
+    </div>
+  </div>
 
   <div class="section-panel">
     <div class="section-title">Nouvelle proposition</div>
@@ -149,7 +164,22 @@
     </div>
     <div class="tr-duo">
       <div class="tr-champ"><label for="tr-r-perte">Perte / jour %</label><input id="tr-r-perte" inputmode="decimal"></div>
-      <div class="tr-champ"><label for="tr-r-comm">Commission / côté</label><input id="tr-r-comm" inputmode="decimal"></div>
+      <div class="tr-champ"><label for="tr-r-comm">Commission fixe / côté ($)</label><input id="tr-r-comm" inputmode="decimal"></div>
+    </div>
+    <div class="tr-duo">
+      <div class="tr-champ"><label for="tr-r-fraispct">Frais proportionnels / côté (%)</label><input id="tr-r-fraispct" inputmode="decimal"></div>
+      <div class="tr-champ"><label for="tr-r-frac">Parts</label>
+        <select id="tr-r-frac">
+          <option value="oui">Fractionnaires (Wealthsimple)</option>
+          <option value="non">Entières seulement</option>
+        </select>
+      </div>
+    </div>
+    <div class="tr-note" style="margin-bottom:9px">
+      Wealthsimple : <b>0 $ de commission</b> sur les actions, parts fractionnaires dès 1 $, et
+      <b>1,5 % de conversion par opération</b> sur un titre américain — soit 3 % l'aller-retour avant
+      le moindre gain. Mets 1,5 dans « frais proportionnels » pour un titre américain, 0 pour un
+      titre canadien.
     </div>
     <div class="tr-duo">
       <button class="tr-btn gris" id="tr-r-sauv">Enregistrer les règles</button>

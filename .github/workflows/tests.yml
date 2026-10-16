@@ -1,0 +1,39 @@
+name: Calcul du mode Trade
+
+# Le mode Trade ne touche ni réseau ni DOM au chargement : toute sa logique de
+# dimensionnement et de garde-fous est composée de fonctions pures (js/trade.js,
+# exportées via module.exports). Ce runner les éprouve donc sans navigateur et
+# sans dépendance à installer — node suffit, et c'est tout l'intérêt d'avoir
+# gardé le calcul séparé de l'affichage.
+
+on:
+  push:
+    paths:
+      - 'js/trade.js'
+      - 'tests/**'
+      - 'trade.html'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    paths:
+      - 'js/trade.js'
+      - 'tests/**'
+      - 'trade.html'
+      - '.github/workflows/tests.yml'
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Éprouver le calcul (dimensionnement, garde-fous, journal)
+        run: node tests/trade-tests.js
+
+      - name: Résumé
+        if: always()
+        run: echo "Le calcul du mode Trade est testé hors navigateur ; aucune cotation, aucun ordre, aucun réseau."

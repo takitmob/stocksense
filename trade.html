@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.anthropic.com https://api.deepseek.com https://api.mistral.ai https://api.twelvedata.com https://openrouter.ai; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F4F6FA" id="theme-color-meta">
+<title>StockSense — Mode Trade</title>
+<!-- Même thème que l'application, appliqué avant le premier rendu -->
+<script>
+(function(){
+  var t = localStorage.getItem('ss_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  var m = document.getElementById('theme-color-meta');
+  if (m) m.content = t === 'dark' ? '#080A0F' : '#F4F6FA';
+})();
+</script>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* ── MODE TRADE — styles propres à la page ─────────────────────── */
+  .tr-grid{display:grid;gap:9px}
+  .tr-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:11px}
+  .tr-kpi .k{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r-lg);padding:11px;box-shadow:var(--shadow-sm)}
+  .tr-kpi .k .l{font-size:9px;font-weight:700;color:var(--mu);letter-spacing:1px;text-transform:uppercase}
+  .tr-kpi .k .v{font-size:19px;font-weight:800;color:var(--tx);letter-spacing:-.5px;margin-top:3px}
+  .tr-kpi .k .s{font-size:10px;color:var(--di);margin-top:1px}
+  .tr-kpi .k.alarme{border-color:var(--re);background:var(--re2)}
+  .tr-kpi .k.alarme .v{color:var(--re)}
+  .tr-kpi .k.ok .v{color:var(--gr)}
+  .tr-champ{margin-bottom:9px}
+  .tr-champ label{display:block;font-size:10px;font-weight:700;color:var(--mu);letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px}
+  .tr-champ input,.tr-champ select{width:100%;padding:10px;border-radius:var(--r-md);border:1px solid var(--bd);background:var(--s2);color:var(--tx);font-size:15px;font-family:inherit;-webkit-appearance:none}
+  .tr-champ input:focus,.tr-champ select:focus{outline:none;border-color:var(--bl)}
+  .tr-duo{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .tr-tri{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+  .tr-seg{display:flex;gap:6px;margin-bottom:11px}
+  .tr-seg button{flex:1;padding:9px;border-radius:var(--r-md);border:1px solid var(--bd);background:var(--s2);color:var(--mu);font-size:12px;font-weight:800}
+  .tr-seg button.on{background:var(--bl);border-color:var(--bl);color:#fff}
+  .tr-seg button.on.vente{background:var(--re);border-color:var(--re)}
+  .tr-btn{width:100%;padding:12px;border-radius:var(--r-md);background:var(--bl);color:#fff;font-size:13px;font-weight:800;box-shadow:0 2px 8px rgba(59,111,224,.25)}
+  .tr-btn.gris{background:var(--s2);color:var(--mu);box-shadow:none;border:1px solid var(--bd)}
+  .tr-btn.danger{background:var(--re2);color:var(--re);border:1px solid rgba(232,51,74,.35);box-shadow:none}
+  .tr-verdict{border-radius:var(--r-lg);padding:13px;margin-bottom:11px;border:1px solid var(--bd);background:var(--s1)}
+  .tr-verdict .t{font-size:15px;font-weight:800;letter-spacing:-.3px}
+  .tr-verdict .t.no{color:var(--re)}
+  .tr-verdict .t.yes{color:var(--gr)}
+  .tr-verdict ul{margin:7px 0 0 16px;font-size:12px;color:var(--mu)}
+  .tr-verdict ul li{margin-bottom:3px}
+  .tr-fig{display:grid;grid-template-columns:1fr 1fr;gap:7px 11px;margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+  .tr-fig > div{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--mu)}
+  .tr-fig > .pied{display:block}
+  .tr-fig b{color:var(--tx);font-weight:700;font-variant-numeric:tabular-nums}
+  .tr-fig .pied{grid-column:1 / -1;font-size:11px;color:var(--di);border-top:1px dashed var(--bd);padding-top:7px}
+  .tr-carte{border:1px solid var(--bd);border-radius:var(--r-lg);padding:11px;background:var(--s1);box-shadow:var(--shadow-sm);margin-bottom:9px}
+  .tr-carte .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .tr-carte .h .tk{font-size:15px;font-weight:800;letter-spacing:-.3px}
+  .tr-carte .h .et{font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;padding:3px 7px;border-radius:999px;background:var(--s2);color:var(--mu)}
+  .tr-carte .h .et.execute{background:var(--gr2);color:var(--gr)}
+  .tr-carte .h .et.clos{background:var(--s2);color:var(--di)}
+  .tr-carte .h .et.refuse{background:var(--re2);color:var(--re)}
+  .tr-carte .l{font-size:11px;color:var(--mu);margin-top:4px;font-variant-numeric:tabular-nums}
+  .tr-carte .a{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+  .tr-carte .a button{flex:1;min-width:88px;padding:8px;border-radius:var(--r-sm);border:1px solid var(--bd);background:var(--s2);color:var(--tx);font-size:11px;font-weight:700}
+  .tr-carte .a button.sup{border-color:rgba(232,51,74,.3);color:var(--re);background:var(--re2)}
+  .tr-vide{font-size:12px;color:var(--di);text-align:center;padding:14px 0}
+  .tr-note{font-size:11px;color:var(--di);line-height:1.5}
+  .tr-copier{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--tx);background:var(--s2);border:1px solid var(--bd);border-radius:var(--r-md);padding:10px;margin-top:9px;white-space:pre-wrap;word-break:break-word}
+  .tr-pill{display:inline-block;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--bd);color:var(--mu)}
+  .tr-scan-titre{font-size:10px;font-weight:700;color:var(--mu);letter-spacing:1px;text-transform:uppercase;margin:11px 0 6px}
+  .tr-scan-liste{display:flex;flex-direction:column;gap:5px}
+  .tr-scan-ligne{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11.5px;color:var(--mu);padding:6px 9px;border-radius:var(--r-sm);background:var(--s2);font-variant-numeric:tabular-nums}
+  .tr-scan-ligne b{color:var(--tx);font-size:12px;min-width:64px}
+  .tr-scan-ligne .di{color:var(--di)}
+  .tr-pill.reel{border-color:var(--re);color:var(--re);background:var(--re2)}
+  .tr-pill.papier{border-color:var(--bl);color:var(--bl);background:rgba(59,111,224,.10)}
+</style>
+</head>
+<body>
+
+<div class="page active" id="page-trade">
+
+  <div class="page-header">
+    <div class="page-eyebrow">Mode Trade</div>
+    <div class="page-title">Poste de décision</div>
+    <div class="page-sub">L'app calcule l'ordre et le risque. Aucun ordre n'est transmis d'ici.</div>
+  </div>
+
+  <div class="section-panel">
+    <div class="section-title">Cadre de l'exercice</div>
+    <div class="tr-note">
+      <b>Rien n'est exécuté par cette page.</b> Elle produit un ticket d'ordre complet (titre, sens,
+      quantité, stop, prix d'invalidation) que tu portes toi-même à ton courtier. Aucune clé d'API
+      n'est stockée ici, aucun mot de passe, aucune connexion à un compte.
+      <br><br>
+      Le mode <b>papier</b> est le défaut : rien n'est engagé, les chiffres servent à mesurer la
+      méthode. Le passage en <b>réel</b> est un choix explicite, et il n'ajoute aucune capacité
+      d'exécution à cette page.
+    </div>
+    <div class="tr-seg" style="margin:11px 0 0">
+      <button id="tr-mode-papier" class="on">📝 PAPIER</button>
+      <button id="tr-mode-reel">💵 RÉEL</button>
+      <button id="tr-halte">🛑 HALTE</button>
+    </div>
+    <div class="tr-note" id="tr-halte-note"></div>
+  </div>
+
+  <div class="tr-kpi" id="tr-kpi"></div>
+
+  <div class="section-panel">
+    <div class="section-title">Balayage du jour</div>
+    <div id="tr-scan"><div class="tr-vide">Chargement du balayage…</div></div>
+    <div class="tr-note" style="margin-top:9px">
+      Le balayage est produit <b>côté serveur</b> (lecture des clôtures réelles, calcul des
+      indicateurs, application de la règle) puis déposé en clair dans <code>data/propositions.json</code>.
+      Il ne transmet rien : il propose, tu décides. Rien n'est ajouté au carnet sans ton clic.
+    </div>
+  </div>
+
+  <div class="section-panel">
+    <div class="section-title">Nouvelle proposition</div>
+    <div class="tr-champ">
+      <label for="tr-ticker">Titre</label>
+      <input id="tr-ticker" placeholder="SHOP, RY, AAPL, SNTS…" autocomplete="off">
+    </div>
+    <div class="tr-seg" id="tr-sens">
+      <button class="on" data-sens="achat">ACHAT</button>
+      <button data-sens="vente">VENTE</button>
+    </div>
+    <div class="tr-tri">
+      <div class="tr-champ"><label for="tr-entree">Entrée</label><input id="tr-entree" inputmode="decimal" placeholder="142,30"></div>
+      <div class="tr-champ"><label for="tr-stop">Stop</label><input id="tr-stop" inputmode="decimal" placeholder="137,50"></div>
+      <div class="tr-champ"><label for="tr-cible">Cible</label><input id="tr-cible" inputmode="decimal" placeholder="155,00"></div>
+    </div>
+    <div class="tr-duo">
+      <div class="tr-champ"><label for="tr-capital">Capital</label><input id="tr-capital" inputmode="decimal"></div>
+      <div class="tr-champ"><label for="tr-risque">Risque / trade (%)</label><input id="tr-risque" inputmode="decimal"></div>
+    </div>
+    <div class="tr-note" id="tr-risque-note" style="margin-bottom:11px"></div>
+    <button class="tr-btn" id="tr-calc">Calculer et vérifier le risque</button>
+  </div>
+
+  <div id="tr-resultat"></div>
+
+  <div class="section-panel">
+    <div class="section-title">Carnet</div>
+    <div id="tr-carnet"></div>
+  </div>
+
+  <div class="section-panel">
+    <div class="section-title">Journal — mesuré, pas espéré</div>
+    <div id="tr-journal"></div>
+  </div>
+
+  <div class="section-panel">
+    <div class="section-title">Règles de risque</div>
+    <div class="tr-note" style="margin-bottom:11px">
+      Ces plafonds sont appliqués par le calcul, avant toute proposition. Ils ne sont pas des
+      conseils : ce sont des limiteurs, et ils se modifient sciemment, pas sous le coup de l'envie.
+    </div>
+    <div class="tr-tri">
+      <div class="tr-champ"><label for="tr-r-risque">Risque / trade %</label><input id="tr-r-risque" inputmode="decimal"></div>
+      <div class="tr-champ"><label for="tr-r-ligne">Plafond / ligne %</label><input id="tr-r-ligne" inputmode="decimal"></div>
+      <div class="tr-champ"><label for="tr-r-pos">Positions max</label><input id="tr-r-pos" inputmode="numeric"></div>
+    </div>
+    <div class="tr-duo">
+      <div class="tr-champ"><label for="tr-r-perte">Perte / jour %</label><input id="tr-r-perte" inputmode="decimal"></div>
+      <div class="tr-champ"><label for="tr-r-comm">Commission fixe / côté ($)</label><input id="tr-r-comm" inputmode="decimal"></div>
+    </div>
+    <div class="tr-duo">
+      <div class="tr-champ"><label for="tr-r-fraispct">Frais proportionnels / côté (%)</label><input id="tr-r-fraispct" inputmode="decimal"></div>
+      <div class="tr-champ"><label for="tr-r-frac">Parts</label>
+        <select id="tr-r-frac">
+          <option value="oui">Fractionnaires (Wealthsimple)</option>
+          <option value="non">Entières seulement</option>
+        </select>
+      </div>
+    </div>
+    <div class="tr-note" style="margin-bottom:9px">
+      Wealthsimple : <b>0 $ de commission</b> sur les actions, parts fractionnaires dès 1 $, et
+      <b>1,5 % de conversion par opération</b> sur un titre américain — soit 3 % l'aller-retour avant
+      le moindre gain. Mets 1,5 dans « frais proportionnels » pour un titre américain, 0 pour un
+      titre canadien.
+    </div>
+    <div class="tr-duo">
+      <button class="tr-btn gris" id="tr-r-sauv">Enregistrer les règles</button>
+      <button class="tr-btn danger" id="tr-vider">Effacer le carnet</button>
+    </div>
+    <div class="tr-duo" style="margin-top:9px">
+      <button class="tr-btn gris" id="tr-export">Exporter mes données</button>
+      <button class="tr-btn gris" id="tr-import-btn">Importer un fichier</button>
+    </div>
+    <input type="file" id="tr-import" accept="application/json,.json" hidden>
+    <div class="tr-note" id="tr-export-note" style="margin-top:7px">
+      Le carnet et les règles vivent dans ce navigateur. Un cache vidé, un autre appareil, et tout
+      disparaît : l'export est la seule copie qui t'appartienne.
+    </div>
+  </div>
+
+  <div class="section-panel">
+    <div class="section-title">Ce que cette page ne fait pas</div>
+    <div class="tr-note">
+      • Elle ne passe aucun ordre, ni directement, ni par un agent.<br>
+      • Elle ne promet aucun rendement : les frais, les écarts et les impôts décident du résultat.<br>
+      • Elle ne garde aucun secret : pas de clé d'API, pas de mot de passe de courtier, jamais.<br>
+      • Elle ne sert qu'à un compte : le tien, pour toi seul.
+    </div>
+  </div>
+
+</div>
+
+<nav class="bottom-nav">
+  <button class="bn" onclick="location.href='index.html'"><div class="bn-icon">🔍</div>ANALYSER</button>
+  <button class="bn" onclick="location.href='index.html#markets'"><div class="bn-icon">🌍</div>MARCHÉS</button>
+  <button class="bn active"><div class="bn-icon">📐</div>TRADE</button>
+  <button class="bn" onclick="location.href='index.html#guide'"><div class="bn-icon">📖</div>GUIDE</button>
+  <button class="bn" onclick="location.href='index.html#history'"><div class="bn-icon">📋</div>HISTORIQUE</button>
+  <button class="bn" onclick="location.href='index.html#settings'"><div class="bn-icon">⚙️</div>RÉGLAGES</button>
+</nav>
+
+<script src="js/trade.js"></script>
+</body>
+</html>

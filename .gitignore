@@ -1,0 +1,13 @@
+# Déchets d'exécution — ne jamais versionner
+__pycache__/
+*.pyc
+*.pyo
+
+# Systèmes de fichiers
+.DS_Store
+Thumbs.db
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp

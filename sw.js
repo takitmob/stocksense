@@ -1,56 +1,107 @@
-const CACHE_NAME = 'stocksense-v1';
-const STATIC_ASSETS = [
+/* StockSense AI — service worker
+ *
+ * Deux règles qui avaient été prises à l'envers dans la v1 :
+ *
+ * 1. Le shell de l'app (HTML, JS, CSS) doit être **network-first**. En
+ *    cache-first, une fois `index.html` et `js/*.js` en cache, plus aucune
+ *    mise à jour ne pouvait atteindre un utilisateur existant : le numéro de
+ *    cache restait `v1` et le navigateur servait indéfiniment l'ancienne app.
+ * 2. Le service worker ne doit **jamais** toucher aux appels d'API. En v1,
+ *    seul `api.anthropic.com` était exclu : les POST vers DeepSeek, Mistral ou
+ *    OpenRouter tombaient dans le handler et `cache.put()` sur une requête POST
+ *    rejette systématiquement (la Cache API n'accepte que GET).
+ *
+ * À CHAQUE MODIFICATION des fichiers statiques : incrémenter CACHE_VERSION.
+ */
+
+const CACHE_VERSION = 'stocksense-v6';
+const SHELL = [
   './',
   './index.html',
+  './trade.html',
   './css/style.css',
   './js/app.js',
   './js/api.js',
   './js/markets.js',
   './js/hours.js',
   './js/db.js',
+  './js/quotes.js',
+  './js/trade.js',
+  './data/suivi.json',
+  './data/propositions.json',
   './js/ui.js',
   './manifest.json'
 ];
 
-// Installation — mise en cache des assets statiques
+// Installation — pré-cache du shell. Un seul fichier manquant ferait échouer
+// tout l'install : `addAll` est donc appelé fichier par fichier.
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
-  );
+  e.waitUntil((async () => {
+    const cache = await caches.open(CACHE_VERSION);
+    await Promise.all(SHELL.map((url) =>
+      cache.add(url).catch(() => console.warn('[SW] non mis en cache :', url))
+    ));
+    await self.skipWaiting();
+  })());
 });
 
-// Activation — nettoyage anciens caches
+// Activation — purge des caches des versions précédentes.
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
 });
 
-// Fetch — stratégie Network First pour API, Cache First pour assets
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
+  const req = e.request;
+  const url = new URL(req.url);
 
-  // API Anthropic : toujours réseau (jamais cache)
-  if (url.hostname === 'api.anthropic.com') {
-    e.respondWith(fetch(e.request));
+  // Jamais de cache pour : les méthodes autres que GET (POST d'API), les
+  // requêtes vers un autre domaine (APIs IA, GitHub), et les requêtes non-http.
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+
+  // Le shell de l'app : réseau d'abord, cache en secours hors ligne.
+  const estShell = req.mode === 'navigate' || /\.(?:html|js|css|json)$/.test(url.pathname) || url.pathname.endsWith('/');
+  if (estShell) {
+    e.respondWith((async () => {
+      try {
+        const reseau = await fetch(req);
+        if (reseau && reseau.status === 200) {
+          const clone = reseau.clone();
+          caches.open(CACHE_VERSION).then((c) => c.put(req, clone)).catch(() => {});
+        }
+        return reseau;
+      } catch (err) {
+        const cache = await caches.match(req);
+        if (cache) return cache;
+        if (req.mode === 'navigate') {
+          const index = await caches.match('./index.html');
+          if (index) return index;
+        }
+        return new Response('Hors ligne', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+      }
+    })());
     return;
   }
 
-  // Assets statiques : cache first, réseau en fallback
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(response => {
-        if (response && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        }
-        return response;
-      }).catch(() => cached || new Response('Offline', { status: 503 }));
-    })
-  );
+  // Le reste (images, icônes, polices) : cache d'abord, c'est immuable.
+  e.respondWith((async () => {
+    const cache = await caches.match(req);
+    if (cache) return cache;
+    try {
+      const reseau = await fetch(req);
+      if (reseau && reseau.status === 200 && reseau.type === 'basic') {
+        const clone = reseau.clone();
+        caches.open(CACHE_VERSION).then((c) => c.put(req, clone)).catch(() => {});
+      }
+      return reseau;
+    } catch (err) {
+      return new Response('Hors ligne', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    }
+  })());
 });

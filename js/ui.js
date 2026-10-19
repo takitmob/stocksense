@@ -5,7 +5,10 @@ function esc(s) {
   if (!s) return '';
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    // L'apostrophe manquait : `renderStockCard` injecte le ticker dans un
+    // attribut onclick="fn('…')" — un ticker en contenant cassait l'attribut.
+    .replace(/'/g,'&#39;').replace(/`/g,'&#96;');
 }
 
 // ── COULEURS ──────────────────────────────────────────────────────────
@@ -75,6 +78,28 @@ function renderVerdict(data) {
     </div>
     <span class="conf-val" style="color:${col.text}">${conf}%</span>
   </div>
+  ${data.score_global == null ? '' : `
+  <div class="conf-row" style="margin-top:6px">
+    <span class="conf-label">SCORE GLOBAL</span>
+    <div class="conf-bar-wrap">
+      <div class="conf-bar" style="width:${Math.max(0, Math.min(100, data.score_global))}%;background:${col.text}"></div>
+    </div>
+    <span class="conf-val" style="color:${col.text}">${data.score_global}/100</span>
+  </div>`}
+  ${data.verdict_recalcule ? `
+  <div class="verdict-summary" style="margin-top:9px;opacity:.85;font-size:11px">
+    ⓘ Verdict recalculé à partir des cinq scores (seuil d'achat : 65/100). L'analyse brute
+    annonçait « ${esc(data.decision_ia || '—')} », incohérent avec ses propres notes.
+  </div>` : ''}
+  ${data.donneesReelles ? `
+  <div class="verdict-summary" style="margin-top:9px;font-size:11px">
+    ✅ Cotations réelles — ${esc(data.source || 'source de marché')}${data.sourceDate ? ' · ' + esc(data.sourceDate) : ''}${data.rsiCalcule == null ? '' : ' · RSI(14) mesuré ' + esc(data.rsiCalcule)}
+  </div>` : `
+  <div class="verdict-summary" style="margin-top:9px;font-size:11px;opacity:.85">
+    ⚠️ Analyse indicative : aucun prix réel n'a pu être injecté (clé de données de marché absente,
+    titre absent de la cote du jour, ou instantané indisponible). Les chiffres sont ceux du modèle,
+    pas des cotations.
+  </div>`}
 </div>`;
 }
 
@@ -124,6 +149,18 @@ function drawChart(data, mode) {
   else                        { raw = data.volume_history; col = '#FFB340'; }
 
   if (!raw || !raw.length) return;
+  // Une série d'un seul point ne fait pas un graphique. On l'écrit au lieu de
+  // dessiner une droite inventée : sur un marché comme la BRVM, l'historique se
+  // construit séance après séance, et la première séance n'a pas de courbe.
+  if (raw.length < 2) {
+    ctx.fillStyle = '#3A4158'; ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Historique insuffisant — ' + raw.length + ' séance enregistrée', W / 2, H / 2 - 8);
+    ctx.fillStyle = '#252B3D'; ctx.font = '9.5px sans-serif';
+    ctx.fillText(mode === 'volume' ? 'la courbe se construira séance après séance'
+                                   : 'le RSI devient calculable à partir de 15 séances', W / 2, H / 2 + 10);
+    return;
+  }
   const n  = raw.length;
   const mn = Math.min(...raw) * 0.96;
   const mx = Math.max(...raw) * 1.04;
@@ -351,6 +388,18 @@ function closeModalOutside(e) {
 }
 
 // ── HANDLE ERRORS ─────────────────────────────────────────────────────
+/* Nom lisible du fournisseur actif. Le message d'erreur 401 disait « Vérifie ta
+ * clé Anthropic » en dur, même avec DeepSeek ou OpenRouter sélectionné. */
+function nomFournisseurActif() {
+  try {
+    const pid = (typeof STATE !== 'undefined' && STATE.provider) || '';
+    const prov = window.SS_API && pid ? SS_API.PROVIDERS[pid] : null;
+    return prov ? prov.name : 'API';
+  } catch (e) {
+    return 'API';
+  }
+}
+
 function handleError(e, label, retryFn) {
   const msg  = String(e && e.message || '');
   const isNet  = /fetch|Failed|OFFLINE|network/i.test(msg);
@@ -364,7 +413,7 @@ function handleError(e, label, retryFn) {
              : is529  ? { ico:'⏳', title:'Service surchargé',         msg:'Trop de demandes. Attends 1 minute.',           hint:'<b>Que faire ?</b><br>Attends 60 secondes puis réessaie.', retry:true }
              : is500  ? { ico:'🔧', title:'Service indisponible',       msg:'Les serveurs sont momentanément surchargés.',   hint:'<b>Que faire ?</b><br>Attends 30 secondes puis réessaie.', retry:true }
              : is429  ? { ico:'🚦', title:'Limite atteinte',            msg:'Trop d\'analyses rapprochées. Patiente 2 min.', hint:'<b>Que faire ?</b><br>Attends 2 minutes.', retry:true }
-             : is401  ? { ico:'🔑', title:'Clé API invalide',           msg:'Vérifie ta clé Anthropic dans les paramètres.', hint:'Va dans ⚙️ Paramètres → entre ta clé API.', retry:false }
+             : is401  ? { ico:'🔑', title:'Clé API invalide',           msg:'Vérifie ta clé ' + nomFournisseurActif() + ' dans les paramètres.', hint:'Va dans ⚙️ Paramètres → entre ta clé API.', retry:false }
              : isJSON ? { ico:'🔄', title:'Réponse inattendue',         msg:'Format IA inattendu pour ' + label + '.',       hint:'Appuie sur Réessayer — fonctionne dans 95% des cas.', retry:true }
              :          { ico:'😕', title:'Erreur inattendue',          msg:'L\'analyse de ' + label + ' a échoué.',         hint:'<b>Que faire ?</b><br>Réessaie ou utilise les accès rapides.', retry:true };
 

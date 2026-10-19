@@ -1,0 +1,28 @@
+{
+  "_lisez_moi": "Liste de suivi du balayage quotidien. Modifie librement : chaque titre est une entrée {symbole, nom, place, fraisPct}. Le symbole suit la nomenclature Yahoo (.TO = Toronto, .V = TSX Venture, rien = États-Unis). fraisPct = frais proportionnels par côté : 0 pour un titre canadien, 1,5 pour un titre américain chez Wealthsimple (1,5 % de conversion, donc 3 % l'aller-retour).",
+  "capital": 100,
+  "regles": {
+    "risquePct": 1.0,
+    "plafondLignePct": 25,
+    "maxPositions": 5,
+    "perteJourPct": 3.0,
+    "comm": 0,
+    "fraisPct": 0,
+    "fractionnaire": true,
+    "rsi_seuil": 50
+  },
+  "titres": [
+    { "symbole": "XIC.TO",  "nom": "iShares Core S&P/TSX (le cœur, tout le marché canadien)", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "VFV.TO",  "nom": "Vanguard S&P 500 en dollars canadiens (les 500 plus grandes américaines, sans conversion)", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "RY.TO",   "nom": "Banque Royale", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "TD.TO",   "nom": "Banque TD", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "ENB.TO",  "nom": "Enbridge (énergie, dividende)", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "CNR.TO",  "nom": "Canadien National (transport)", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "SU.TO",   "nom": "Suncor", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "ATD.TO",  "nom": "Couche-Tard", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "SHOP.TO", "nom": "Shopify", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "MFC.TO",  "nom": "Manuvie", "place": "Toronto", "fraisPct": 0 },
+    { "symbole": "AAPL",    "nom": "Apple (titre américain : 1,5 % de conversion par côté)", "place": "NASDAQ", "fraisPct": 1.5 },
+    { "symbole": "MSFT",    "nom": "Microsoft (titre américain : 1,5 % de conversion par côté)", "place": "NASDAQ", "fraisPct": 1.5 }
+  ]
+}

@@ -272,10 +272,47 @@ function trEtatDuJour(props, regles, capital, jour) {
   };
 }
 
+// ── SAUVEGARDE : sortir ses données du navigateur ────────────────────────────
+/* Un carnet qui vit dans le localStorage meurt avec le cache. Sans export, ce
+ * n'est pas un outil : c'est une démonstration. Le format est versionné pour
+ * qu'un fichier exporté aujourd'hui reste lisible après une évolution. */
+function trSerialiser(etat) {
+  return JSON.stringify({
+    format: 'stocksense-trade',
+    version: 1,
+    exporte: new Date().toISOString(),
+    capital: etat.capital,
+    regles: etat.regles,
+    propositions: etat.propositions || [],
+  }, null, 2);
+}
+
+function trDeserialiser(texte) {
+  let d;
+  try { d = JSON.parse(texte); }
+  catch (e) { return { ok: false, motifs: ['Ce fichier n\'est pas du JSON lisible.'] }; }
+  const motifs = [];
+  if (!d || typeof d !== 'object') motifs.push('Fichier vide ou mal formé.');
+  else {
+    if (d.format !== 'stocksense-trade') motifs.push('Ce fichier n\'a pas été exporté par le mode Trade.');
+    if (!Array.isArray(d.propositions)) motifs.push('Aucune liste de propositions dans le fichier.');
+  }
+  if (motifs.length) return { ok: false, motifs: motifs };
+  return {
+    ok: true, motifs: [],
+    donnees: {
+      capital: isFinite(trNum(d.capital)) ? trNum(d.capital) : 100,
+      regles: Object.assign({}, TR_REGLES_DEFAUT, d.regles || {}),
+      propositions: d.propositions.filter((p) => p && p.ticker && p.calcul),
+    },
+  };
+}
+
 // ── EXPORT (tests node) ───────────────────────────────────────────────────
 const TR_API = {
   TR_REGLES_DEFAUT, TR_ETATS,
   trNum, trFmt, trDev, trCalculer, trValider, trOrdreTexte, trStats, trEtatDuJour,
+  trSerialiser, trDeserialiser,
 };
 if (typeof window !== 'undefined') window.SS_TRADE_API = TR_API;
 if (typeof module !== 'undefined' && module.exports) module.exports = TR_API;
@@ -591,6 +628,44 @@ if (typeof document !== 'undefined') {
         S.regles = Object.assign({}, S.regles, r);
         $('tr-risque').value = S.regles.risquePct;   // le formulaire suit la règle, pas l'inverse
         sauver(); rendre();
+      };
+
+      $('tr-export').onclick = function () {
+        try {
+          const blob = new Blob([trSerialiser(S)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'stocksense-trade-' + new Date().toISOString().slice(0, 10) + '.json';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+          $('tr-export-note').textContent = '✓ Fichier téléchargé : ' + a.download
+            + ' — garde-le hors de ce navigateur.';
+        } catch (e) {
+          $('tr-export-note').textContent = 'Export impossible ici (' + e.message
+            + '). Le carnet reste intact.';
+        }
+      };
+
+      $('tr-import-btn').onclick = function () { $('tr-import').click(); };
+      $('tr-import').onchange = function (ev) {
+        const f = ev.target.files && ev.target.files[0];
+        if (!f) return;
+        const lecteur = new FileReader();
+        lecteur.onload = function () {
+          const res = trDeserialiser(String(lecteur.result));
+          if (!res.ok) { alert('Import refusé :\n· ' + res.motifs.join('\n· ')); ev.target.value = ''; return; }
+          if (!window.confirm('Remplacer le carnet actuel par ' + res.donnees.propositions.length
+            + ' proposition(s) ?')) { ev.target.value = ''; return; }
+          S.capital = res.donnees.capital;
+          S.regles = res.donnees.regles;
+          S.propositions = res.donnees.propositions;
+          sauver(); rendre();
+          $('tr-export-note').textContent = '✓ ' + res.donnees.propositions.length
+            + ' proposition(s) importée(s).';
+          ev.target.value = '';
+        };
+        lecteur.readAsText(f);
       };
 
       $('tr-vider').onclick = function () {

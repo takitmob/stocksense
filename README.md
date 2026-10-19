@@ -169,3 +169,9 @@ Puis ouvre `http://localhost:8080` dans Safari.
 ## ⚠️ Avertissement
 
 StockSense AI est un outil informatif uniquement. Les analyses générées par l'IA ne constituent pas des conseils financiers officiels. Effectuez toujours vos propres recherches avant d'investir.
+
+## Licence
+
+Tous droits réservés — aucun droit accordé au-delà de la loi ; toute utilisation demande une autorisation écrite.
+
+Voir `LICENSE`. © 2026 Josué Konan.

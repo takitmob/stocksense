@@ -163,5 +163,20 @@ const gros = [{ etat: 'clos', ts: Date.now(), pnl: -160, calcul: { fraisAR: 9.9,
 const e2 = T.trEtatDuJour(gros, regl, 5000, new Date().toISOString().slice(0, 10));
 ok('plafond de perte du jour atteint -> halte', e2.plafondAtteint, e2);
 
+console.log('\n— Sauvegarde : export et import');
+const etat = { capital: 100, regles: Object.assign({}, T.TR_REGLES_DEFAUT), propositions: [
+  { ticker: 'RY.TO', sens: 'achat', entree: 279.01, stop: 267.99, calcul: { qte: 0.0896, montant: 25, fraisAR: 0, risqueReel: 0.99, pertePct: 0.99, rr: 2 } },
+] };
+const sortie = T.trSerialiser(etat);
+ok('le fichier est daté et versionné', JSON.parse(sortie).format === 'stocksense-trade' && JSON.parse(sortie).version === 1);
+const retour = T.trDeserialiser(sortie);
+ok('l\'aller-retour conserve les propositions', retour.ok && retour.donnees.propositions.length === 1, retour);
+ok('l\'aller-retour conserve le capital', retour.donnees.capital === 100, retour.donnees);
+ok('l\'aller-retour conserve les règles', retour.donnees.regles.risquePct === T.TR_REGLES_DEFAUT.risquePct);
+ok('un JSON cassé est refusé', !T.trDeserialiser('{pas du json').ok);
+const etranger = T.trDeserialiser(JSON.stringify({ format: 'autre-chose', propositions: [] }));
+ok('un fichier d\'une autre application est refusé', !etranger.ok && etranger.motifs.join(' ').indexOf('pas été exporté') > 0);
+ok('un export sans liste est refusé', !T.trDeserialiser(JSON.stringify({ format: 'stocksense-trade' })).ok);
+
 console.log('\n' + n + ' tests, ' + echecs + ' échec(s)');
 process.exit(echecs ? 1 : 0);

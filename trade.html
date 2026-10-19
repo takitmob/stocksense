@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.anthropic.com https://api.deepseek.com https://api.mistral.ai https://api.twelvedata.com https://openrouter.ai; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#F4F6FA" id="theme-color-meta">
@@ -184,6 +185,15 @@
     <div class="tr-duo">
       <button class="tr-btn gris" id="tr-r-sauv">Enregistrer les règles</button>
       <button class="tr-btn danger" id="tr-vider">Effacer le carnet</button>
+    </div>
+    <div class="tr-duo" style="margin-top:9px">
+      <button class="tr-btn gris" id="tr-export">Exporter mes données</button>
+      <button class="tr-btn gris" id="tr-import-btn">Importer un fichier</button>
+    </div>
+    <input type="file" id="tr-import" accept="application/json,.json" hidden>
+    <div class="tr-note" id="tr-export-note" style="margin-top:7px">
+      Le carnet et les règles vivent dans ce navigateur. Un cache vidé, un autre appareil, et tout
+      disparaît : l'export est la seule copie qui t'appartienne.
     </div>
   </div>
 

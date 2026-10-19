@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.anthropic.com https://api.deepseek.com https://api.mistral.ai https://api.twelvedata.com https://openrouter.ai; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -233,7 +234,7 @@
       <div class="api-field-wrap" id="field-claude">
         <div class="api-field-label">
           Clé API Anthropic
-          <a href="https://console.anthropic.com" target="_blank">→ Obtenir une clé</a>
+          <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer">→ Obtenir une clé</a>
         </div>
         <input class="api-key-input" id="key-claude" type="password"
           placeholder="sk-ant-api03-…" autocomplete="off" autocorrect="off" spellcheck="false">
@@ -245,7 +246,7 @@
       <div class="api-field-wrap" id="field-mistral">
         <div class="api-field-label">
           Clé API Mistral AI
-          <a href="https://console.mistral.ai" target="_blank">→ Obtenir une clé</a>
+          <a href="https://console.mistral.ai" target="_blank" rel="noopener noreferrer">→ Obtenir une clé</a>
         </div>
         <input class="api-key-input" id="key-mistral" type="password"
           placeholder="Clé Mistral AI…" autocomplete="off" autocorrect="off" spellcheck="false">
@@ -253,7 +254,7 @@
       <div class="api-field-wrap visible" id="field-deepseek">
         <div class="api-field-label">
           Clé API DeepSeek
-          <a href="https://platform.deepseek.com" target="_blank">→ Obtenir une clé</a>
+          <a href="https://platform.deepseek.com" target="_blank" rel="noopener noreferrer">→ Obtenir une clé</a>
         </div>
         <input class="api-key-input" id="key-deepseek" type="password"
           placeholder="sk-…" autocomplete="off" autocorrect="off" spellcheck="false">
@@ -261,7 +262,7 @@
       <div class="api-field-wrap" id="field-openrouter">
         <div class="api-field-label">
           Clé API OpenRouter
-          <a href="https://openrouter.ai/keys" target="_blank">→ Obtenir une clé gratuite</a>
+          <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">→ Obtenir une clé gratuite</a>
         </div>
         <input class="api-key-input" id="key-openrouter" type="password"
           placeholder="sk-or-…" autocomplete="off" autocorrect="off" spellcheck="false">
@@ -288,7 +289,7 @@
     </div>
     <div class="api-field-label">
       Clé API Twelve Data
-      <a href="https://twelvedata.com/pricing" target="_blank">→ Créer une clé gratuite</a>
+      <a href="https://twelvedata.com/pricing" target="_blank" rel="noopener noreferrer">→ Créer une clé gratuite</a>
     </div>
     <input class="api-key-input" id="quotes-key" type="password"
       placeholder="Colle ta clé Twelve Data…" autocomplete="off" autocorrect="off" spellcheck="false">
